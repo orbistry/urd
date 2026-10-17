@@ -39,6 +39,16 @@ cp refs/pallas/test_data/*.block "$T/blocks/pallas/"
 cp refs/pallas/test_data/dijkstra-fixtures.md "$T/blocks/pallas/"
 copy refs/ouroboros-consensus/ouroboros-consensus-cardano/golden/cardano/CardanoNodeToNodeVersion2 "$T/blocks/consensus"
 
+# Byron: dingo's complete preprod Byron chain (genesis EBB and 45 main
+# blocks, as [type, block] pairs) and single mainnet blocks, plus
+# cardano-ledger's Byron CBOR goldens (hex dumps of encoded values).
+rm -rf "$T/byron"
+mkdir -p "$T/byron/dingo"
+for f in preprod-byron-chain.cbor preprod-byron-last-84242.cbor mainnet-byron-4471207.cbor mainnet-byron-last-4492799.cbor; do
+	cp refs/dingo/ledger/testdata/$f "$T/byron/dingo/"
+done
+copy refs/cardano-ledger/eras/byron/ledger/impl/golden/cbor "$T/byron/golden"
+
 # Amaru's labelled Conway decoding corpus.
 copy refs/amaru/crates/amaru-kernel/tests/data/cbor.decode "$T/cbor-decode/amaru"
 find "$T/cbor-decode/amaru" -name '*.js' -delete

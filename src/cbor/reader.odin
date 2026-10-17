@@ -25,6 +25,9 @@ Error :: enum u8 {
 	Invalid_Info,
 	// An indefinite-length item where a definite one is required.
 	Unexpected_Indefinite,
+	// A definite-length item where an indefinite one is required (Byron's
+	// lists, which cardano-ledger decodes with `decodeListLenIndef`).
+	Unexpected_Definite,
 	// A break byte (0xff) outside an indefinite-length container.
 	Unexpected_Break,
 	// A value does not fit the requested type.
@@ -248,6 +251,24 @@ read_int_full :: #force_inline proc "contextless" (r: ^Reader) -> (v: Int, err: 
 	return {}, .Unexpected_Major
 }
 
+// cborg's `decodeWord*Canonical`: major 0 with the shortest head encoding,
+// at most `limit`.
+@(require_results)
+read_uint_canonical :: proc "contextless" (r: ^Reader, limit: u64) -> (v: u64, err: Error) {
+	start := r.pos
+	h := read_head(r) or_return
+	if h.major != .Unsigned {
+		return 0, .Unexpected_Major
+	}
+	if r.pos - start != head_size(h.arg) {
+		return 0, .Invalid_Value
+	}
+	if h.arg > limit {
+		return 0, .Overflow
+	}
+	return h.arg, .None
+}
+
 // ---------------------------------------------------------------------------
 // Strings
 
@@ -281,6 +302,26 @@ read_string :: #force_inline proc "contextless" (r: ^Reader, major: Major) -> (b
 	s := r.data[r.pos:][:n]
 	r.pos += n
 	return s, .None
+}
+
+// cborg's `decodeBytesCanonical`: a definite byte string whose head uses the
+// shortest encoding.
+@(require_results)
+read_bytes_canonical :: proc "contextless" (r: ^Reader) -> (b: []u8, err: Error) {
+	start := r.pos
+	h := read_head(r) or_return
+	if h.major != .Bytes {
+		return nil, .Unexpected_Major
+	}
+	if h.info == INFO_INDEFINITE || r.pos - start != head_size(h.arg) {
+		return nil, .Invalid_Value
+	}
+	if h.arg > u64(len(r.data) - r.pos) {
+		return nil, .Eof
+	}
+	b = r.data[r.pos:][:h.arg]
+	r.pos += int(h.arg)
+	return b, .None
 }
 
 // Definite-length byte string of exactly `n` bytes.
@@ -704,4 +745,39 @@ read_natural :: proc "contextless" (r: ^Reader) -> (v: u64, fits: bool, err: Err
 		return max(u64), false, .None
 	}
 	return i.small, true, .None
+}
+
+// ---------------------------------------------------------------------------
+// Text
+
+// Strict UTF-8 (no overlong forms, surrogates or code points past U+10FFFF),
+// as Haskell's `Text` decoding requires.
+//
+// TODO(conformance): cborg's `decodeString` is assumed to reject invalid
+// UTF-8; confirm against cborg's Codec.CBOR.Read.
+valid_utf8 :: proc "contextless" (b: []u8) -> bool {
+	i := 0
+	for i < len(b) {
+		c := b[i]
+		switch {
+		case c < 0x80:
+			i += 1
+		case c >= 0xc2 && c <= 0xdf:
+			if i + 1 >= len(b) || b[i + 1] & 0xc0 != 0x80 do return false
+			i += 2
+		case c >= 0xe0 && c <= 0xef:
+			if i + 2 >= len(b) || b[i + 1] & 0xc0 != 0x80 || b[i + 2] & 0xc0 != 0x80 do return false
+			if c == 0xe0 && b[i + 1] < 0xa0 do return false // overlong
+			if c == 0xed && b[i + 1] > 0x9f do return false // surrogates
+			i += 3
+		case c >= 0xf0 && c <= 0xf4:
+			if i + 3 >= len(b) || b[i + 1] & 0xc0 != 0x80 || b[i + 2] & 0xc0 != 0x80 || b[i + 3] & 0xc0 != 0x80 do return false
+			if c == 0xf0 && b[i + 1] < 0x90 do return false // overlong
+			if c == 0xf4 && b[i + 1] > 0x8f do return false // > U+10FFFF
+			i += 4
+		case:
+			return false
+		}
+	}
+	return true
 }

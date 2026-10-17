@@ -97,6 +97,25 @@ The rows are still structs (AoS). They will be split hot/cold or moved to
 those passes' access patterns, and the change should be measured with the
 benchmark rather than guessed.
 
+### Byron blocks
+
+Byron blocks decode into their own tables (`byron.Tables`): transactions,
+inputs, outputs, witnesses, delegation certificates, update proposals and
+votes. Every Byron decoding check is structural or order-based (fixed shapes,
+strictly increasing attribute keys), so Byron needs no scratch arena. Two
+Byron hashing rules shape the decoder:
+
+- A transaction id is the hash of the transaction re-encoded at version 1,
+  not of the bytes received. The decoder accepts only the shapes the encoder
+  produces, so the two differ only through non-minimal CBOR heads (including
+  inside the CBOR-in-CBOR payloads of inputs and addresses). `heads_minimal`
+  detects that case, and only then is the transaction re-encoded
+  (`reencode_tx`). Every transaction in mainnet epochs 0 to 2 and in the
+  fixtures is canonical.
+- The body proof (Merkle root over the transactions as received, witnesses
+  hash, delegation and update payload hashes) is computed while decoding.
+  Comparing it with the header is a rule (`proof_matches`).
+
 ### Ledger state on disk
 
 The ledger state follows the UTxO-HD shape:
@@ -186,7 +205,7 @@ they evaluate in parallel.
 
 | Area | Source of truth |
 |------|-----------------|
-| CBOR, blocks | ouroboros-consensus goldens (`ouroboros-consensus-cardano/golden`), pallas `test_data`, the dingo preview ImmutableDB corpus (300 chunks), ledger CDDLs. |
+| CBOR, blocks | ouroboros-consensus goldens (`ouroboros-consensus-cardano/golden`), pallas `test_data`, the dingo preview ImmutableDB corpus (300 chunks), dingo's preprod Byron chain, cardano-ledger's Byron CBOR goldens, ledger CDDLs. |
 | Crypto | cardano-base VRF, KES and BLS vectors; plutus builtin conformance cases; hash-parity goldens. |
 | Leader math | `cardano-ledger/libs/non-integral/reference` golden tests; pallas `node-vectors.tsv`. |
 | Headers | amaru `header-test-cases.json` (Haskell-generated mutations). |
@@ -196,7 +215,10 @@ they evaluate in parallel.
 
 ## Roadmap
 
-Each milestone ends with its verification suite passing.
+Each milestone ends with its verification suite passing. Status: 1, 2
+(Byron through Conway; Dijkstra headers only), 3 and 5 are done. 4 has
+libsodium Ed25519, VRF and KES; the Byron (donna) Ed25519, RIPEMD-160, blst
+and libsecp256k1 remain.
 
 1. **Foundation.** Build script, base types, CBOR reader and writer, blake2b.
 2. **Blocks.** Decode every era (Byron EBB/main through Conway, Dijkstra

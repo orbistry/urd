@@ -5,20 +5,10 @@ import vmem "core:mem/virtual"
 
 import "urd:base"
 
-// A contiguous run of rows in one of the block tables.
-Range :: struct {
-	start: u32,
-	count: u32,
-}
+Range :: base.Range
+range_end :: base.range_end
 
-range_end :: #force_inline proc "contextless" (r: Range) -> u32 {
-	return r.start + r.count
-}
-
-Tx_In :: struct {
-	id:    base.Tx_Id,
-	index: u16,
-}
+Tx_In :: base.Tx_In
 
 // Haskell `Ord TxIn`: tx id bytes, then index.
 tx_in_less :: proc(a, b: Tx_In) -> bool {

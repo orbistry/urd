@@ -181,7 +181,7 @@ read_bounded_text :: proc "contextless" (d: ^Decoder, limit: int) -> (s: []u8, e
 	if len(t) > limit {
 		return nil, .Invalid_Value
 	}
-	if !valid_utf8(transmute([]u8)t) {
+	if !cbor.valid_utf8(transmute([]u8)t) {
 		return nil, .Invalid_Value
 	}
 	return transmute([]u8)t, .None
@@ -190,33 +190,6 @@ read_bounded_text :: proc "contextless" (d: ^Decoder, limit: int) -> (s: []u8, e
 // URL and DNS-name length limit: 64 bytes below v9, 128 from v9.
 url_limit :: #force_inline proc "contextless" (d: ^Decoder) -> int {
 	return 128 if d.v >= 9 else 64
-}
-
-valid_utf8 :: proc "contextless" (b: []u8) -> bool {
-	i := 0
-	for i < len(b) {
-		c := b[i]
-		switch {
-		case c < 0x80:
-			i += 1
-		case c >= 0xc2 && c <= 0xdf:
-			if i + 1 >= len(b) || b[i + 1] & 0xc0 != 0x80 do return false
-			i += 2
-		case c >= 0xe0 && c <= 0xef:
-			if i + 2 >= len(b) || b[i + 1] & 0xc0 != 0x80 || b[i + 2] & 0xc0 != 0x80 do return false
-			if c == 0xe0 && b[i + 1] < 0xa0 do return false // overlong
-			if c == 0xed && b[i + 1] > 0x9f do return false // surrogates
-			i += 3
-		case c >= 0xf0 && c <= 0xf4:
-			if i + 3 >= len(b) || b[i + 1] & 0xc0 != 0x80 || b[i + 2] & 0xc0 != 0x80 || b[i + 3] & 0xc0 != 0x80 do return false
-			if c == 0xf0 && b[i + 1] < 0x90 do return false // overlong
-			if c == 0xf4 && b[i + 1] > 0x8f do return false // > U+10FFFF
-			i += 4
-		case:
-			return false
-		}
-	}
-	return true
 }
 
 // ---------------------------------------------------------------------------

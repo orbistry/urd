@@ -1,9 +1,8 @@
 package ledger
 
-import "core:hash"
-
 import "urd:base"
 import "urd:cbor"
+import "urd:ledger/byron"
 
 // Address decoding, docs/decoding/txbody.md §4
 // (cardano-ledger-core Cardano/Ledger/Address.hs).
@@ -158,95 +157,15 @@ read_varint_bounded :: proc "contextless" (
 }
 
 // Byron address inside a Shelley-era output (decodeBootstrapAddress, at
-// version 1): [#6.24(bytes), crc32] over the whole buffer, the CRC checked,
-// and the payload a definite [root, attributes, type] consuming all of it.
+// version 1): the Byron address decoder, consuming the whole buffer.
 @(private = "file")
 parse_byron_address :: proc "contextless" (b: []u8) -> (a: Address, err: Error) {
-	r := cbor.reader(b)
-	cbor.expect_array_definite(&r, 2) or_return
-	tag := cbor.read_tag(&r) or_return
-	if tag != 24 {
-		return {}, .Unexpected_Tag
-	}
-	payload := cbor.read_bytes(&r) or_return
-	crc := cbor.read_u32(&r) or_return
-	cbor.expect_end(&r) or_return
-	if hash.crc32(payload) != crc {
-		return {}, .Invalid_Value
-	}
-
-	p := cbor.reader(payload)
-	cbor.expect_array_definite(&p, 3) or_return
-	root := cbor.read_bytes_n(&p, 28) or_return
-	copy(a.payment.hash[:], root)
-	a.network = .Mainnet
-	attrs := cbor.read_map(&p) or_return
-	if attrs.indefinite {
-		return {}, .Unexpected_Indefinite
-	}
-	prev_key := -1
-	for _ in 0 ..< attrs.n {
-		key := cbor.read_u8(&p) or_return
-		if int(key) <= prev_key {
-			return {}, .Not_Sorted
-		}
-		prev_key = int(key)
-		value := cbor.read_bytes(&p) or_return
-		switch key {
-		case 1:
-			// HD payload: a canonical CBOR byte string, consuming all of it.
-			vr := cbor.reader(value)
-			read_bytes_canonical(&vr) or_return
-			cbor.expect_end(&vr) or_return
-		case 2:
-			// Network magic: a canonical Word32, consuming all of it.
-			vr := cbor.reader(value)
-			read_uint_canonical(&vr, u64(max(u32))) or_return
-			cbor.expect_end(&vr) or_return
-			a.network = .Testnet
-		}
-	}
-	addr_type := read_uint_canonical(&p, u64(max(u8))) or_return
-	if addr_type != 0 && addr_type != 2 {
-		return {}, .Invalid_Value
-	}
-	cbor.expect_end(&p) or_return
+	ba := byron.parse_address(b) or_return
 	a.kind = .Byron
+	a.network = .Testnet if ba.has_magic else .Mainnet
+	a.payment.hash = ba.root
 	a.stored_len = u16(len(b))
 	return a, .None
-}
-
-// cborg's *Canonical decoders: the head must use the shortest encoding.
-read_uint_canonical :: proc "contextless" (r: ^cbor.Reader, limit: u64) -> (v: u64, err: Error) {
-	start := r.pos
-	h := cbor.read_head(r) or_return
-	if h.major != .Unsigned {
-		return 0, .Unexpected_Major
-	}
-	if r.pos - start != cbor.head_size(h.arg) {
-		return 0, .Invalid_Value
-	}
-	if h.arg > limit {
-		return 0, .Overflow
-	}
-	return h.arg, .None
-}
-
-read_bytes_canonical :: proc "contextless" (r: ^cbor.Reader) -> (b: []u8, err: Error) {
-	start := r.pos
-	h := cbor.read_head(r) or_return
-	if h.major != .Bytes {
-		return nil, .Unexpected_Major
-	}
-	if h.info == cbor.INFO_INDEFINITE || r.pos - start != cbor.head_size(h.arg) {
-		return nil, .Invalid_Value
-	}
-	if h.arg > u64(len(r.data) - r.pos) {
-		return nil, .Eof
-	}
-	b = r.data[r.pos:][:h.arg]
-	r.pos += int(h.arg)
-	return b, .None
 }
 
 // ---------------------------------------------------------------------------

@@ -61,3 +61,21 @@ span_of :: #force_inline proc "contextless" (buf, sub: []u8) -> Span {
 	off := uintptr(raw_data(sub)) - uintptr(raw_data(buf))
 	return Span{off = u32(off), len = u32(len(sub))}
 }
+
+// A contiguous run of rows in one of a block's decoded tables.
+Range :: struct {
+	start: u32,
+	count: u32,
+}
+
+range_end :: #force_inline proc "contextless" (r: Range) -> u32 {
+	return r.start + r.count
+}
+
+// A transaction input: the id of the transaction that created the output and
+// the output's index. Both Byron (`TxInUtxo TxId Word16`) and later eras
+// (`TxIn TxId TxIx`, TxIx a Word16) index outputs with 16 bits.
+Tx_In :: struct {
+	id:    Tx_Id,
+	index: u16,
+}

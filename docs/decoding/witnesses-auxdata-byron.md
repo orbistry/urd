@@ -1137,6 +1137,12 @@ The `bool` is decoded and **discarded**, so `false` is accepted. The signed byte
    implementation must compute the UTxO txid by re-encoding. The alternative is to prove that every
    Byron tx on the target chain is canonical.
 
+   urd does both cheaply. The decoder accepts only the shapes this encoder produces, and the
+   parsed address attributes must already be canonical. So the re-encoding differs from the wire
+   bytes exactly when some head is non-minimal, including inside the tag-24 payloads of inputs and
+   addresses. When every head is minimal, urd hashes the wire bytes; otherwise it re-encodes
+   (`ledger/byron/tx.odin`).
+
 2. **Tx signature data.** `recoverSigData` = `hashDecoded` of the **annotated (wire) tx bytes**
    (`byron/UTxO/TxWitness.hs:136-140`). The signed payload is `serialize'` of that hash. Witness
    verification is a rule (`byron/UTxO/Validation.hs:298-325`).
@@ -1264,8 +1270,8 @@ bounds.
    with equal key hashes (A.1.4). This comes from `containers`, not vendored.
 4. **Byron TxId re-serialization** (B.4.1). The code is unambiguous. It is listed here because it
    differs from the "hash of wire bytes" intuition and from the Merkle and signature hashes.
-   Whether any mainnet Byron tx is non-canonical, and so would expose the difference, was not
-   checked.
+   Whether any mainnet Byron tx is non-canonical, and so would expose the difference, has been
+   checked only for epochs 0 to 2: all 14,515 transactions there are canonical.
 5. **`TxSizeLinear` `round` to `Word64`** wraps on negative or huge values before the `mkLovelace`
    bound (B.3.10). This is standard Haskell `fromInteger` behaviour; it only matters for update
    proposals.

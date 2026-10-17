@@ -36,8 +36,8 @@ The shell is zsh-like: quote globs (`--include='*.hs'`), and don't start an
   quadratic loops over attacker-sized input.
 - Decoders follow the Haskell decoders exactly, not the CDDL. Cite the
   Haskell source (file and function) in a comment when a rule is subtle.
-  Blocks of era E decode at `eraProtVerLow E`: Shelley 2, Allegra 3, Mary 4,
-  Alonzo 5, Babbage 7, Conway 9, Dijkstra 12.
+  Blocks of era E decode at `eraProtVerLow E`: Byron 1 (`ledger/byron`),
+  Shelley 2, Allegra 3, Mary 4, Alonzo 5, Babbage 7, Conway 9, Dijkstra 12.
 - Keep original bytes (as slices or `base.Span`) for anything that is hashed.
 - Consensus crypto lives in `ccrypto` and matches libsodium/cardano-base
   semantics. Never use `core:crypto/ed25519` for consensus.

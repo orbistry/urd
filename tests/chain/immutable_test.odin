@@ -9,6 +9,7 @@ import "core:encoding/endian"
 import "urd:base"
 import "urd:ccrypto"
 import "urd:ledger"
+import "urd:ledger/byron"
 import "urd:storage/immutable"
 
 // 300 preview chunks (Alonzo and Babbage), vendored from dingo's test data
@@ -47,6 +48,11 @@ check_db :: proc(t: ^testing.T, dir: string) {
 	ledger.tables_init(&tables)
 	defer ledger.tables_destroy(&tables)
 	full: ledger.Block
+	btables: byron.Tables
+	byron.tables_init(&btables)
+	defer byron.tables_destroy(&btables)
+	prev: base.Block_Hash
+	have_prev := false
 	for n in chunks {
 		lerr := immutable.chunk_load(&chunk, dir, n, verify = true)
 		if !testing.expectf(t, lerr == .None, "chunk %d: %v", n, lerr) do return
@@ -59,6 +65,8 @@ check_db :: proc(t: ^testing.T, dir: string) {
 			per_era[env.era] += 1
 			blocks += 1
 			if env.era == .Byron {
+				txs += check_byron_block(t, &chunk, i, env, &btables, &prev, &have_prev)
+				free_all(context.temp_allocator)
 				continue
 			}
 
@@ -114,6 +122,50 @@ check_db :: proc(t: ^testing.T, dir: string) {
 		}
 	}
 	fmt.printfln("%s: decoded %d blocks, %d txs: %v", dir, blocks, txs, per_era)
+}
+
+// Fully decodes a Byron block and checks it against the secondary index (hash,
+// header bytes, slot, or epoch for an EBB), its body proof and the previous
+// block's hash. Returns its number of transactions.
+check_byron_block :: proc(
+	t: ^testing.T,
+	chunk: ^immutable.Chunk,
+	i: int,
+	env: ledger.Envelope,
+	tables: ^byron.Tables,
+	prev: ^base.Block_Hash,
+	have_prev: ^bool,
+) -> int {
+	n := chunk.number
+	entry := &chunk.entries[i]
+	is_ebb := env.tag == .Byron_Ebb
+	b: byron.Block
+	err := byron.decode_block(env.block, is_ebb, ledger.BYRON_EPOCH_SLOTS, tables, &b)
+	if !testing.expectf(t, err == .None, "chunk %d block %d (Byron): %v", n, i, err) do return 0
+	testing.expectf(t, b.hash == entry.hash, "chunk %d block %d: header hash mismatch", n, i)
+	hdr := immutable.chunk_header(chunk, i)
+	hb := base.span_bytes(env.block, b.header)
+	testing.expectf(
+		t,
+		raw_data(hdr) == raw_data(hb) && len(hdr) == len(hb),
+		"chunk %d block %d: header span mismatch",
+		n,
+		i,
+	)
+	block_prev: base.Block_Hash
+	if is_ebb {
+		testing.expectf(t, entry.slot_or_epoch == b.ebb.epoch, "chunk %d block %d: epoch mismatch", n, i)
+		block_prev = b.ebb.prev
+	} else {
+		testing.expectf(t, entry.slot_or_epoch == u64(b.main.slot), "chunk %d block %d: slot mismatch", n, i)
+		testing.expectf(t, byron.proof_matches(&b), "chunk %d block %d: body proof mismatch", n, i)
+		block_prev = b.main.prev
+	}
+	if have_prev^ {
+		testing.expectf(t, block_prev == prev^, "chunk %d block %d: does not extend its predecessor", n, i)
+	}
+	prev^, have_prev^ = b.hash, true
+	return len(tables.txs)
 }
 
 // Preview, preprod and mainnet all use 129600 slots per KES period.

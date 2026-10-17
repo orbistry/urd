@@ -85,32 +85,17 @@ bench_decode :: proc(args: []string) -> int {
 		}
 	}
 
-	tables: ledger.Block_Tables
-	ledger.tables_init(&tables)
-	defer ledger.tables_destroy(&tables)
-
-	decode_all :: proc(blocks: [][]u8, tables: ^ledger.Block_Tables) -> (txs: int, ok: bool) {
-		b: ledger.Block
-		for raw in blocks {
-			env, eerr := ledger.decode_envelope(raw)
-			if eerr != .None do return txs, false
-			if env.era == .Byron {
-				header, herr := byron.block_header(env.block)
-				if herr != .None do return txs, false
-				_, ierr := byron.decode_header_info(header, env.tag == .Byron_Ebb, ledger.BYRON_EPOCH_SLOTS)
-				if ierr != .None do return txs, false
-				continue
-			}
-			if ledger.decode_block(env.block, env.era, tables, &b) != .None do return txs, false
-			if b.body_hash != b.header.body_hash do return txs, false
-			txs += len(tables.txs)
-		}
-		return txs, true
+	tables: Tables
+	ledger.tables_init(&tables.shelley)
+	byron.tables_init(&tables.byron)
+	defer {
+		ledger.tables_destroy(&tables.shelley)
+		byron.tables_destroy(&tables.byron)
 	}
 
-	txs, ok := decode_all(blocks[:], &tables)
-	if !ok {
-		fmt.eprintln("decode failed during warm-up")
+	txs, failed := decode_all(blocks[:], &tables)
+	if failed >= 0 {
+		fmt.eprintfln("block %d: decode failed during warm-up", failed)
 		return 1
 	}
 
@@ -126,9 +111,9 @@ bench_decode :: proc(args: []string) -> int {
 		context.temp_allocator = counting_allocator(&temp)
 		for _ in 0 ..< passes {
 			start := time.tick_now()
-			_, pok := decode_all(blocks[:], &tables)
+			_, pfailed := decode_all(blocks[:], &tables)
 			secs := time.duration_seconds(time.tick_since(start))
-			if !pok {
+			if pfailed >= 0 {
 				fmt.eprintln("decode failed")
 				return 1
 			}
@@ -154,4 +139,36 @@ bench_decode :: proc(args: []string) -> int {
 		temp.bytes,
 	)
 	return 0
+}
+
+@(private = "file")
+Tables :: struct {
+	shelley: ledger.Block_Tables,
+	byron:   byron.Tables,
+}
+
+// Decodes every block and checks its body against the header (body hash, or
+// Byron's body proof). Returns the number of transactions, and the index of
+// the first block that fails (-1 if none).
+@(private = "file")
+decode_all :: proc(blocks: [][]u8, tables: ^Tables) -> (txs: int, failed: int) {
+	b: ledger.Block
+	bb: byron.Block
+	for raw, i in blocks {
+		env, eerr := ledger.decode_envelope(raw)
+		if eerr != .None do return txs, i
+		if env.era == .Byron {
+			is_ebb := env.tag == .Byron_Ebb
+			if byron.decode_block(env.block, is_ebb, ledger.BYRON_EPOCH_SLOTS, &tables.byron, &bb) != .None {
+				return txs, i
+			}
+			if !is_ebb && !byron.proof_matches(&bb) do return txs, i
+			txs += len(tables.byron.txs)
+			continue
+		}
+		if ledger.decode_block(env.block, env.era, &tables.shelley, &b) != .None do return txs, i
+		if b.body_hash != b.header.body_hash do return txs, i
+		txs += len(tables.shelley.txs)
+	}
+	return txs, -1
 }

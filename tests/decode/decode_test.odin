@@ -11,6 +11,7 @@ import "core:testing"
 import "urd:base"
 import "urd:cbor"
 import "urd:ledger"
+import "urd:ledger/byron"
 
 @(private = "file")
 read_hex_file :: proc(path: string) -> []u8 {
@@ -22,12 +23,42 @@ read_hex_file :: proc(path: string) -> []u8 {
 }
 
 @(private = "file")
-decode_full_block :: proc(raw: []u8, tables: ^ledger.Block_Tables) -> (era: base.Era, err: cbor.Error) {
+Tables :: struct {
+	shelley: ledger.Block_Tables,
+	byron:   byron.Tables,
+}
+
+@(private = "file")
+tables_init :: proc(t: ^Tables) {
+	ledger.tables_init(&t.shelley)
+	byron.tables_init(&t.byron)
+}
+
+@(private = "file")
+tables_destroy :: proc(t: ^Tables) {
+	ledger.tables_destroy(&t.shelley)
+	byron.tables_destroy(&t.byron)
+}
+
+// Decodes a hard-fork wrapped block of any era and checks its body against
+// its header (body hash, or Byron's body proof).
+@(private = "file")
+decode_full_block :: proc(raw: []u8, tables: ^Tables) -> (era: base.Era, err: cbor.Error) {
 	env := ledger.decode_envelope(raw) or_return
 	era = env.era
-	if env.era == .Byron || env.era == .Dijkstra do return env.era, .None
+	switch env.era {
+	case .Byron:
+		is_ebb := env.tag == .Byron_Ebb
+		bb: byron.Block
+		byron.decode_block(env.block, is_ebb, ledger.BYRON_EPOCH_SLOTS, &tables.byron, &bb) or_return
+		if !is_ebb && !byron.proof_matches(&bb) do return env.era, .Inconsistent
+		return env.era, .None
+	case .Dijkstra:
+		return env.era, .None
+	case .Shelley ..= .Conway:
+	}
 	b: ledger.Block
-	ledger.decode_block(env.block, env.era, tables, &b) or_return
+	ledger.decode_block(env.block, env.era, &tables.shelley, &b) or_return
 	if b.body_hash != b.header.body_hash do return env.era, .Inconsistent
 	return env.era, .None
 }
@@ -51,9 +82,9 @@ test_pallas_blocks :: proc(t: ^testing.T) {
 	DIR :: "testdata/blocks/pallas/"
 	infos, err := os.read_all_directory_by_path(DIR, context.temp_allocator)
 	testing.expect(t, err == nil)
-	tables: ledger.Block_Tables
-	ledger.tables_init(&tables)
-	defer ledger.tables_destroy(&tables)
+	tables: Tables
+	tables_init(&tables)
+	defer tables_destroy(&tables)
 	per_era: [base.Era]int
 	for fi in infos {
 		if !strings.has_suffix(fi.name, ".block") do continue
@@ -75,10 +106,10 @@ test_pallas_blocks :: proc(t: ^testing.T) {
 @(test)
 test_consensus_golden_blocks :: proc(t: ^testing.T) {
 	DIR :: "testdata/blocks/consensus/"
-	tables: ledger.Block_Tables
-	ledger.tables_init(&tables)
-	defer ledger.tables_destroy(&tables)
-	for name in ([]string{"Block_Shelley", "Block_Allegra", "Block_Mary", "Block_Alonzo", "Block_Babbage", "Block_Conway"}) {
+	tables: Tables
+	tables_init(&tables)
+	defer tables_destroy(&tables)
+	for name in ([]string{"Block_Byron_EBB", "Block_Byron_regular", "Block_Shelley", "Block_Allegra", "Block_Mary", "Block_Alonzo", "Block_Babbage", "Block_Conway"}) {
 		data, err := os.read_entire_file(fmt.tprintf("%s%s", DIR, name), context.temp_allocator)
 		testing.expect(t, err == nil, name)
 		r := cbor.reader(data)
@@ -87,6 +118,31 @@ test_consensus_golden_blocks :: proc(t: ^testing.T) {
 		_, derr := decode_full_block(raw, &tables)
 		testing.expectf(t, derr == .None, "%s: %v", name, derr)
 	}
+}
+
+// ouroboros-consensus golden chain-sync headers, one per era: each must
+// decode in full, and point at the block of the same era.
+@(test)
+test_consensus_golden_headers :: proc(t: ^testing.T) {
+	DIR :: "testdata/blocks/consensus/"
+	for name in ([]string{"Header_Byron_EBB", "Header_Byron_regular", "Header_Shelley", "Header_Allegra", "Header_Mary", "Header_Alonzo", "Header_Babbage", "Header_Conway"}) {
+		data, err := os.read_entire_file(fmt.tprintf("%s%s", DIR, name), context.temp_allocator)
+		testing.expect(t, err == nil, name)
+		info, herr := ledger.decode_wrapped_header(data)
+		testing.expectf(t, herr == .None, "%s: %v", name, herr)
+
+		// The golden block of the same era has the same header.
+		block_name, _ := strings.replace(name, "Header_", "Block_", 1, context.temp_allocator)
+		bdata, berr := os.read_entire_file(fmt.tprintf("%s%s", DIR, block_name), context.temp_allocator)
+		testing.expect(t, berr == nil, block_name)
+		r := cbor.reader(bdata)
+		raw, eerr := cbor.read_embedded(&r)
+		testing.expectf(t, eerr == .None, "%s: %v", block_name, eerr)
+		binfo, _, ierr := ledger.decode_block_info(raw)
+		testing.expectf(t, ierr == .None, "%s: %v", block_name, ierr)
+		testing.expectf(t, info.point == binfo.point, "%s: header and block disagree", name)
+	}
+	free_all(context.temp_allocator)
 }
 
 Meta :: struct {
@@ -103,9 +159,9 @@ Meta :: struct {
 @(test)
 test_amaru_corpus :: proc(t: ^testing.T) {
 	ROOT :: "testdata/cbor-decode/amaru/"
-	tables: ledger.Block_Tables
-	ledger.tables_init(&tables)
-	defer ledger.tables_destroy(&tables)
+	tables: Tables
+	tables_init(&tables)
+	defer tables_destroy(&tables)
 
 	Kind :: enum {
 		Block,
@@ -141,9 +197,9 @@ test_amaru_corpus :: proc(t: ^testing.T) {
 			case .Block:
 				_, derr = decode_full_block(sample, &tables)
 			case .Tx:
-				derr = ledger.decode_tx(sample, .Conway, &tables)
+				derr = ledger.decode_tx(sample, .Conway, &tables.shelley)
 			case .Body:
-				derr = ledger.decode_tx_body(sample, .Conway, &tables)
+				derr = ledger.decode_tx_body(sample, .Conway, &tables.shelley)
 			}
 			total += 1
 			expected := meta.well_formed != meta.known_amaru_divergence

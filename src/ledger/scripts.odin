@@ -369,7 +369,7 @@ validate_metadatum :: proc(d: ^Decoder) -> Error {
 			total: u64
 			if h.info != cbor.INFO_INDEFINITE {
 				if h.arg > u64(cbor.remaining(r)) do return .Eof
-				if h.major == .Text && !valid_utf8(r.data[r.pos:][:h.arg]) do return .Invalid_Value
+				if h.major == .Text && !cbor.valid_utf8(r.data[r.pos:][:h.arg]) do return .Invalid_Value
 				r.pos += int(h.arg)
 				total = h.arg
 			} else {
@@ -383,7 +383,7 @@ validate_metadatum :: proc(d: ^Decoder) -> Error {
 						break
 					}
 					chunk := cbor.read_string(r, h.major) or_return
-					if h.major == .Text && !valid_utf8(chunk) do return .Invalid_Value
+					if h.major == .Text && !cbor.valid_utf8(chunk) do return .Invalid_Value
 					total += u64(len(chunk))
 				}
 			}
