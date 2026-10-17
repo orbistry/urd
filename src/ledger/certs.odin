@@ -8,25 +8,25 @@ import "urd:cbor"
 // Certificates, docs/decoding/txbody.md §6.
 
 Cert_Kind :: enum u8 {
-	Stake_Registration      = 0,
-	Stake_Deregistration    = 1,
-	Stake_Delegation        = 2,
-	Pool_Registration       = 3,
-	Pool_Retirement         = 4,
-	Genesis_Delegation      = 5,
-	Mir                     = 6,
-	Reg_Deposit             = 7,
-	Unreg_Deposit           = 8,
-	Vote_Delegation         = 9,
-	Stake_Vote_Delegation   = 10,
-	Stake_Reg_Delegation    = 11,
-	Vote_Reg_Delegation     = 12,
+	Stake_Registration        = 0,
+	Stake_Deregistration      = 1,
+	Stake_Delegation          = 2,
+	Pool_Registration         = 3,
+	Pool_Retirement           = 4,
+	Genesis_Delegation        = 5,
+	Mir                       = 6,
+	Reg_Deposit               = 7,
+	Unreg_Deposit             = 8,
+	Vote_Delegation           = 9,
+	Stake_Vote_Delegation     = 10,
+	Stake_Reg_Delegation      = 11,
+	Vote_Reg_Delegation       = 12,
 	Stake_Vote_Reg_Delegation = 13,
-	Committee_Hot_Auth      = 14,
-	Committee_Cold_Resign   = 15,
-	Drep_Registration       = 16,
-	Drep_Deregistration     = 17,
-	Drep_Update             = 18,
+	Committee_Hot_Auth        = 14,
+	Committee_Cold_Resign     = 15,
+	Drep_Registration         = 16,
+	Drep_Deregistration       = 17,
+	Drep_Update               = 18,
 }
 
 Drep_Kind :: enum u8 {
@@ -91,11 +91,11 @@ Mir_Pot :: enum u8 {
 }
 
 Mir :: struct {
-	pot:            Mir_Pot,
+	pot:          Mir_Pot,
 	// Either a transfer to the other pot of `coin`, or per-credential deltas.
-	to_other_pot:   bool,
-	coin:           u64,
-	entries:        Range,
+	to_other_pot: bool,
+	coin:         u64,
+	entries:      Range,
 }
 
 Mir_Entry :: struct {

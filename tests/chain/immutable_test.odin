@@ -73,12 +73,33 @@ check_db :: proc(t: ^testing.T, dir: string, only: []u32 = nil) {
 
 			// The secondary index records where the header sits in the raw block.
 			hdr := immutable.chunk_header(&chunk, i)
-			testing.expectf(t, raw_data(hdr) == raw_data(h.raw) && len(hdr) == len(h.raw),
-				"chunk %d block %d: header span mismatch", n, i)
+			testing.expectf(
+				t,
+				raw_data(hdr) == raw_data(h.raw) && len(hdr) == len(h.raw),
+				"chunk %d block %d: header span mismatch",
+				n,
+				i,
+			)
 			testing.expectf(t, h.hash == entry.hash, "chunk %d block %d: header hash mismatch", n, i)
-			testing.expectf(t, h.slot == entry.slot_or_epoch, "chunk %d block %d: slot %d != %d", n, i, h.slot, entry.slot_or_epoch)
+			testing.expectf(
+				t,
+				h.slot == entry.slot_or_epoch,
+				"chunk %d block %d: slot %d != %d",
+				n,
+				i,
+				h.slot,
+				entry.slot_or_epoch,
+			)
 			testing.expectf(t, parts.body_hash == h.body_hash, "chunk %d block %d: body hash mismatch", n, i)
-			testing.expectf(t, u32(parts.body_size) == h.body_size, "chunk %d block %d: body size %d != %d", n, i, parts.body_size, h.body_size)
+			testing.expectf(
+				t,
+				u32(parts.body_size) == h.body_size,
+				"chunk %d block %d: body size %d != %d",
+				n,
+				i,
+				parts.body_size,
+				h.body_size,
+			)
 			check_header_crypto(t, h, n, i)
 
 			// Full decode: every transaction, and the body hash computed from
@@ -86,7 +107,13 @@ check_db :: proc(t: ^testing.T, dir: string, only: []u32 = nil) {
 			ferr := ledger.decode_block(env.block, env.era, &tables, &full)
 			if !testing.expectf(t, ferr == .None, "chunk %d block %d (%v): full decode %v", n, i, env.era, ferr) do return
 			testing.expectf(t, full.body_hash == h.body_hash, "chunk %d block %d: decoded body hash mismatch", n, i)
-			testing.expectf(t, u32(full.body_size) == h.body_size, "chunk %d block %d: decoded body size mismatch", n, i)
+			testing.expectf(
+				t,
+				u32(full.body_size) == h.body_size,
+				"chunk %d block %d: decoded body size mismatch",
+				n,
+				i,
+			)
 			txs += len(tables.txs)
 			free_all(context.temp_allocator)
 		}
@@ -118,6 +145,12 @@ check_header_crypto :: proc(t: ^testing.T, h: ^ledger.Header, chunk: u32, i: int
 	for c, k in certs {
 		if k == 1 && !ledger.is_tpraos(h.era) do break
 		beta, vok := ccrypto.vrf03_proof_to_hash(c.proof[:])
-		testing.expectf(t, vok && string(beta[:]) == string(c.output), "chunk %d block %d: VRF output is not the proof hash", chunk, i)
+		testing.expectf(
+			t,
+			vok && string(beta[:]) == string(c.output),
+			"chunk %d block %d: VRF output is not the proof hash",
+			chunk,
+			i,
+		)
 	}
 }

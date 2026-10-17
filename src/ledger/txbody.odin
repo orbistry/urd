@@ -307,7 +307,14 @@ anchor_eq :: proc "contextless" (d: ^Decoder, a, b: Anchor) -> bool {
 
 @(private = "file")
 cert_eq :: proc(d: ^Decoder, a, b: ^Cert) -> bool {
-	if a.kind != b.kind || a.cred != b.cred || a.hot != b.hot || a.pool != b.pool || a.drep != b.drep || a.coin != b.coin || a.epoch != b.epoch || !anchor_eq(d, a.anchor, b.anchor) {
+	if a.kind != b.kind ||
+	   a.cred != b.cred ||
+	   a.hot != b.hot ||
+	   a.pool != b.pool ||
+	   a.drep != b.drep ||
+	   a.coin != b.coin ||
+	   a.epoch != b.epoch ||
+	   !anchor_eq(d, a.anchor, b.anchor) {
 		return false
 	}
 	if a.kind == .Pool_Registration {
@@ -318,10 +325,17 @@ cert_eq :: proc(d: ^Decoder, a, b: ^Cert) -> bool {
 
 @(private = "file")
 pool_params_eq :: proc(d: ^Decoder, a, b: ^Pool_Params) -> bool {
-	if a.operator != b.operator || a.vrf_key_hash != b.vrf_key_hash || a.pledge != b.pledge || a.cost != b.cost || a.margin != b.margin || a.reward_account != b.reward_account || a.has_metadata != b.has_metadata {
+	if a.operator != b.operator ||
+	   a.vrf_key_hash != b.vrf_key_hash ||
+	   a.pledge != b.pledge ||
+	   a.cost != b.cost ||
+	   a.margin != b.margin ||
+	   a.reward_account != b.reward_account ||
+	   a.has_metadata != b.has_metadata {
 		return false
 	}
-	if a.has_metadata && (!span_eq(d, a.metadata_url, b.metadata_url) || !span_eq(d, a.metadata_hash, b.metadata_hash)) {
+	if a.has_metadata &&
+	   (!span_eq(d, a.metadata_url, b.metadata_url) || !span_eq(d, a.metadata_hash, b.metadata_hash)) {
 		return false
 	}
 	if a.owners.count != b.owners.count {
@@ -351,7 +365,10 @@ proposals_have_duplicates :: proc(d: ^Decoder, xs: []Proposal) -> bool {
 	for i in 0 ..< len(xs) {
 		for j in i + 1 ..< len(xs) {
 			a, b := &xs[i], &xs[j]
-			if a.deposit != b.deposit || a.return_account != b.return_account || a.kind != b.kind || !anchor_eq(d, a.anchor, b.anchor) {
+			if a.deposit != b.deposit ||
+			   a.return_account != b.return_account ||
+			   a.kind != b.kind ||
+			   !anchor_eq(d, a.anchor, b.anchor) {
 				continue
 			}
 			if proposal_action_eq(d, a, b) do return true
@@ -362,7 +379,10 @@ proposals_have_duplicates :: proc(d: ^Decoder, xs: []Proposal) -> bool {
 
 @(private = "file")
 proposal_action_eq :: proc(d: ^Decoder, a, b: ^Proposal) -> bool {
-	if a.has_prev != b.has_prev || (a.has_prev && a.prev != b.prev) || a.has_policy != b.has_policy || (a.has_policy && a.policy != b.policy) {
+	if a.has_prev != b.has_prev ||
+	   (a.has_prev && a.prev != b.prev) ||
+	   a.has_policy != b.has_policy ||
+	   (a.has_policy && a.policy != b.policy) {
 		return false
 	}
 	switch a.kind {
@@ -371,11 +391,24 @@ proposal_action_eq :: proc(d: ^Decoder, a, b: ^Proposal) -> bool {
 	case .Hard_Fork:
 		return a.pv_major == b.pv_major && a.pv_minor == b.pv_minor
 	case .Treasury_Withdrawals:
-		return slice.equal(d.t.treasury_wdrls[a.withdrawals.start:][:a.withdrawals.count], d.t.treasury_wdrls[b.withdrawals.start:][:b.withdrawals.count])
+		return slice.equal(
+			d.t.treasury_wdrls[a.withdrawals.start:][:a.withdrawals.count],
+			d.t.treasury_wdrls[b.withdrawals.start:][:b.withdrawals.count],
+		)
 	case .No_Confidence, .Info:
 		return true
 	case .Update_Committee:
-		return a.threshold == b.threshold && slice.equal(d.t.committee_creds[a.removed.start:][:a.removed.count], d.t.committee_creds[b.removed.start:][:b.removed.count]) && slice.equal(d.t.committee_creds[a.added.start:][:a.added.count], d.t.committee_creds[b.added.start:][:b.added.count])
+		return(
+			a.threshold == b.threshold &&
+			slice.equal(
+				d.t.committee_creds[a.removed.start:][:a.removed.count],
+				d.t.committee_creds[b.removed.start:][:b.removed.count],
+			) &&
+			slice.equal(
+				d.t.committee_creds[a.added.start:][:a.added.count],
+				d.t.committee_creds[b.added.start:][:b.added.count],
+			) \
+		)
 	case .New_Constitution:
 		return anchor_eq(d, a.constitution, b.constitution)
 	}

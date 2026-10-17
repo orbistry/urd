@@ -255,10 +255,10 @@ Ratio :: struct {
 }
 
 Interval_Kind :: enum u8 {
-	Unit,               // [0, 1]
-	Non_Negative,       // [0, 2^64 - 1]
-	Positive,           // [10^-19, 2^64 - 1]
-	Positive_Unit,      // [10^-19, 1]
+	Unit,          // [0, 1]
+	Non_Negative,  // [0, 2^64 - 1]
+	Positive,      // [10^-19, 2^64 - 1]
+	Positive_Unit, // [10^-19, 1]
 }
 
 // Tag 30 (mandatory below v12), then an array of exactly two `Integer`s, a
@@ -317,7 +317,10 @@ normalise_interval :: proc "contextless" (n, dd: cbor.Integer, kind: Interval_Ki
 	if nm > u128(max(u64)) || dm > u128(max(u64)) {
 		return {}, .Invalid_Value
 	}
-	q = Ratio{num = u64(nm), den = u64(dm)}
+	q = Ratio {
+		num = u64(nm),
+		den = u64(dm),
+	}
 	switch kind {
 	case .Unit:
 		if q.num > q.den do return {}, .Invalid_Value

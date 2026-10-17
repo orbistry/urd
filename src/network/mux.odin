@@ -61,9 +61,9 @@ Mux_Error :: enum u8 {
 
 // Ingress bytes of one (protocol, side) pair.
 Channel :: struct {
-	buf: [dynamic]u8,
+	buf:   [dynamic]u8,
 	// Start of the unconsumed bytes in `buf`.
-	pos: int,
+	pos:   int,
 	// Upper bound on buffered, unconsumed bytes (protocol-dependent).
 	limit: int,
 }

@@ -90,12 +90,12 @@ test_consensus_golden_blocks :: proc(t: ^testing.T) {
 }
 
 Meta :: struct {
-	well_formed:                    bool,
-	description:                    string,
+	well_formed:                   bool,
+	description:                   string,
 	// Set where the label follows the CDDL but the Haskell ledger (and so
 	// Amaru) decides the other way; the reason explains why.
-	known_amaru_divergence:         bool,
-	known_amaru_divergence_reason:  string,
+	known_amaru_divergence:        bool,
+	known_amaru_divergence_reason: string,
 }
 
 // Amaru's Conway decoding corpus: blocks, transactions and transaction
@@ -123,11 +123,17 @@ test_amaru_corpus :: proc(t: ^testing.T) {
 		testing.expect(t, err == nil, set.dir)
 		for fi in infos {
 			if fi.type != .Directory do continue
-			meta_raw, merr := os.read_entire_file(fmt.tprintf("%s%s/meta.json", set.dir, fi.name), context.temp_allocator)
+			meta_raw, merr := os.read_entire_file(
+				fmt.tprintf("%s%s/meta.json", set.dir, fi.name),
+				context.temp_allocator,
+			)
 			if merr != nil do continue
 			meta: Meta
 			if json.unmarshal(meta_raw, &meta, allocator = context.temp_allocator) != nil do continue
-			sample, serr := os.read_entire_file(fmt.tprintf("%s%s/sample.cbor", set.dir, fi.name), context.temp_allocator)
+			sample, serr := os.read_entire_file(
+				fmt.tprintf("%s%s/sample.cbor", set.dir, fi.name),
+				context.temp_allocator,
+			)
 			if serr != nil do continue
 
 			derr: cbor.Error
@@ -157,7 +163,19 @@ test_amaru_corpus :: proc(t: ^testing.T) {
 			}
 			if (derr == .None) != expected {
 				wrong += 1
-				testing.expectf(t, false, "%v %s: expected ok=%v but got %v at %d (%s; %s)\n  near: %s", set.kind, fi.name[:8], expected, derr, ledger.last_error_pos, meta.description, meta.known_amaru_divergence_reason, context_diag(sample, ledger.last_error_pos))
+				testing.expectf(
+					t,
+					false,
+					"%v %s: expected ok=%v but got %v at %d (%s; %s)\n  near: %s",
+					set.kind,
+					fi.name[:8],
+					expected,
+					derr,
+					ledger.last_error_pos,
+					meta.description,
+					meta.known_amaru_divergence_reason,
+					context_diag(sample, ledger.last_error_pos),
+				)
 			}
 		}
 	}

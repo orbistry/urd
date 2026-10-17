@@ -103,7 +103,10 @@ read_witness_set :: proc(d: ^Decoder, tx: ^Tx) -> Error {
 				if len(t.scripts) == first do return .Empty
 				// scriptDecoderV9: a repeated script hash fails.
 				xs := t.scripts[first:]
-				slice.sort_by(xs, proc(a, b: Script) -> bool {return hash28_less(base.Hash28(a.hash), base.Hash28(b.hash))})
+				slice.sort_by(
+					xs,
+					proc(a, b: Script) -> bool {return hash28_less(base.Hash28(a.hash), base.Hash28(b.hash))},
+				)
 				for i in 1 ..< len(xs) {
 					if xs[i].hash == xs[i - 1].hash do return .Duplicate_Key
 				}

@@ -49,6 +49,23 @@ _test mode pkg name:
             -out:{{bin}}/test-$(echo "$p" | tr / -) $names
     done
 
+# Format every Odin source file in place (config: odinfmt.json).
+fmt:
+    odinfmt -w src
+    odinfmt -w tests
+
+# Fail if any Odin source file is not formatted.
+fmt-check:
+    #!/bin/sh
+    status=0
+    for f in $(find src tests -name '*.odin'); do
+        if ! odinfmt "$f" | cmp -s - "$f"; then
+            echo "not formatted: $f"
+            status=1
+        fi
+    done
+    exit $status
+
 # Clone the reference repositories into refs/ at their pinned commits.
 refs *names:
     scripts/fetch-refs.sh {{names}}

@@ -27,14 +27,14 @@ Pointer :: struct {
 }
 
 Address :: struct {
-	raw:     base.Span,
-	kind:    Address_Kind,
-	network: Network,
+	raw:            base.Span,
+	kind:           Address_Kind,
+	network:        Network,
 	// Payment credential; for Byron, the address root as a key hash.
-	payment: Credential,
+	payment:        Credential,
 	// Stake credential of a base address.
-	stake:   Credential,
-	ptr:     Pointer,
+	stake:          Credential,
+	ptr:            Pointer,
 	// Length of the address as the ledger stores it. Below v7 trailing bytes
 	// after a Shelley address are accepted and dropped, so this can be shorter
 	// than `raw`. Pointer addresses are re-serialised from `ptr`, which below v9
@@ -130,9 +130,17 @@ read_pointer_strict :: proc "contextless" (b: []u8, pos: ^int) -> (p: Pointer, e
 }
 
 @(private = "file")
-read_varint_bounded :: proc "contextless" (b: []u8, pos: ^int, max_bytes: int, first_mask: u8) -> (v: u64, err: Error) {
+read_varint_bounded :: proc "contextless" (
+	b: []u8,
+	pos: ^int,
+	max_bytes: int,
+	first_mask: u8,
+) -> (
+	v: u64,
+	err: Error,
+) {
 	start := pos^
-	for n := 1; ; n += 1 {
+	for n := 1;; n += 1 {
 		if pos^ >= len(b) do return 0, .Eof
 		byte := b[pos^]
 		pos^ += 1

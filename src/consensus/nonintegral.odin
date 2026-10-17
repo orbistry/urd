@@ -172,7 +172,7 @@ lncf :: proc "contextless" (max_n: int, x: Fixed) -> Fixed {
 	sq: i64 = 1
 	sq_count := 0
 	b_n := one
-	for n := 0; ; n += 1 {
+	for n := 0;; n += 1 {
 		a_n: Fixed
 		if n == 0 {
 			a_n = x
@@ -231,13 +231,19 @@ Compare_Result :: enum u8 {
 // taylorExpCmp boundX cmp x: decides whether cmp is above or below e^x using
 // a Taylor expansion with a Lagrange error bound. Also returns the
 // approximation and the iteration count, as the Haskell CompareResult does.
-taylor_exp_cmp :: proc "contextless" (bound_x, cmp, x: Fixed) -> (res: Compare_Result, approx: Fixed, iterations: int) {
+taylor_exp_cmp :: proc "contextless" (
+	bound_x, cmp, x: Fixed,
+) -> (
+	res: Compare_Result,
+	approx: Fixed,
+	iterations: int,
+) {
 	MAX_N :: 1000
 	one := fixed_one()
 	err := x
 	acc := one
 	divisor := one
-	for n := 0; ; n += 1 {
+	for n := 0;; n += 1 {
 		if n == MAX_N {
 			return .Max_Reached, acc, n
 		}

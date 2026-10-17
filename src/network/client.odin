@@ -10,13 +10,13 @@ import "urd:cbor"
 // tests to pull headers and blocks from a peer; the node itself drives the
 // same mux and codecs from an event loop.
 Client :: struct {
-	socket:  net.TCP_Socket,
-	mux:     Mux,
-	w:       cbor.Writer,
-	rx_buf:  []u8,
-	version: u64,
+	socket:             net.TCP_Socket,
+	mux:                Mux,
+	w:                  cbor.Writer,
+	rx_buf:             []u8,
+	version:            u64,
 	// Chain-sync requests sent but not yet answered by a roll forward/back.
-	in_flight: int,
+	in_flight:          int,
 	// Keep-alive: the responder drops a client that stays silent on this
 	// protocol for 97 s (timeLimitsKeepAlive).
 	keep_alive_at:      time.Tick,
@@ -140,7 +140,15 @@ client_recv :: proc(c: ^Client, protocol: Protocol) -> (msg: []u8, err: Client_E
 }
 
 // Finds the most recent of `points` that the peer also has.
-client_find_intersect :: proc(c: ^Client, points: []base.Point) -> (found: bool, point: base.Point, tip: Tip, err: Client_Error) {
+client_find_intersect :: proc(
+	c: ^Client,
+	points: []base.Point,
+) -> (
+	found: bool,
+	point: base.Point,
+	tip: Tip,
+	err: Client_Error,
+) {
 	cbor.writer_reset(&c.w)
 	write_find_intersect(&c.w, points)
 	client_send(c, .Chain_Sync) or_return

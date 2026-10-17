@@ -64,7 +64,9 @@ test_ed25519_plutus_conformance :: proc(t: ^testing.T) {
 
 @(test)
 test_small_order_and_canonical :: proc(t: ^testing.T) {
-	identity := [32]u8{0 = 1}
+	identity := [32]u8 {
+		0 = 1,
+	}
 	testing.expect(t, has_small_order(identity[:]))
 	identity[31] = 0x80 // sign bit is ignored
 	testing.expect(t, has_small_order(identity[:]))
@@ -81,16 +83,44 @@ test_small_order_and_canonical :: proc(t: ^testing.T) {
 	testing.expect(t, !is_canonical_point(p[:]))
 
 	// The base point is canonical and of large order.
-	base_point := [32]u8{0 = 0x58}
+	base_point := [32]u8 {
+		0 = 0x58,
+	}
 	for i in 1 ..< 32 do base_point[i] = 0x66
 	testing.expect(t, is_canonical_point(base_point[:]))
 	testing.expect(t, !has_small_order(base_point[:]))
 
 	// A valid RFC 8032 signature (test 1) with S replaced by S + L must fail.
-	pk, _ := hex.decode(transmute([]u8)string("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"), context.temp_allocator)
-	sig, _ := hex.decode(transmute([]u8)string("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"), context.temp_allocator)
+	pk, _ := hex.decode(
+		transmute([]u8)string("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"),
+		context.temp_allocator,
+	)
+	sig, _ := hex.decode(
+		transmute([]u8)string(
+			"e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
+		),
+		context.temp_allocator,
+	)
 	testing.expect(t, ed25519_verify(pk, nil, sig))
-	L := [32]u8{0 = 0xed, 1 = 0xd3, 2 = 0xf5, 3 = 0x5c, 4 = 0x1a, 5 = 0x63, 6 = 0x12, 7 = 0x58, 8 = 0xd6, 9 = 0x9c, 10 = 0xf7, 11 = 0xa2, 12 = 0xde, 13 = 0xf9, 14 = 0xde, 15 = 0x14, 31 = 0x10}
+	L := [32]u8 {
+		0  = 0xed,
+		1  = 0xd3,
+		2  = 0xf5,
+		3  = 0x5c,
+		4  = 0x1a,
+		5  = 0x63,
+		6  = 0x12,
+		7  = 0x58,
+		8  = 0xd6,
+		9  = 0x9c,
+		10 = 0xf7,
+		11 = 0xa2,
+		12 = 0xde,
+		13 = 0xf9,
+		14 = 0xde,
+		15 = 0x14,
+		31 = 0x10,
+	}
 	carry: u16
 	for i in 0 ..< 32 {
 		v := u16(sig[32 + i]) + u16(L[i]) + carry
@@ -121,7 +151,15 @@ read_kv_vector :: proc(path: string) -> map[string][]u8 {
 @(test)
 test_vrf03_vectors :: proc(t: ^testing.T) {
 	DIR :: "refs/cardano-base/cardano-crypto-praos/test_vectors/"
-	names := []string{"standard_10", "standard_11", "standard_12", "generated_1", "generated_2", "generated_3", "generated_4"}
+	names := []string {
+		"standard_10",
+		"standard_11",
+		"standard_12",
+		"generated_1",
+		"generated_2",
+		"generated_3",
+		"generated_4",
+	}
 	for name in names {
 		v := read_kv_vector(fmt.tprintf("%svrf_ver03_%s", DIR, name))
 		beta, ok := vrf03_verify(v["pk"], v["pi"], v["alpha"])

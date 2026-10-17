@@ -395,7 +395,14 @@ read_map :: #force_inline proc "contextless" (r: ^Reader) -> (c: Container, err:
 
 @(private)
 @(require_results)
-read_container :: #force_inline proc "contextless" (r: ^Reader, major: Major, per_item: u64) -> (c: Container, err: Error) {
+read_container :: #force_inline proc "contextless" (
+	r: ^Reader,
+	major: Major,
+	per_item: u64,
+) -> (
+	c: Container,
+	err: Error,
+) {
 	h := read_head(r) or_return
 	if h.major != major {
 		return {}, .Unexpected_Major

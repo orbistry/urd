@@ -48,7 +48,9 @@ test_wide_roundtrip_and_division :: proc(t: ^testing.T) {
 	testing.expect_value(t, str(wide_div_floor(num("-7"), num("-2"))), "3")
 	testing.expect_value(t, str(wide_div_floor(num("-8"), num("2"))), "-4")
 	// Multi-limb Knuth division.
-	a := num("1157920892373161954235709850086879078532699846656405640394575840079131296399360000000000000000000000000000000000")
+	a := num(
+		"1157920892373161954235709850086879078532699846656405640394575840079131296399360000000000000000000000000000000000",
+	)
 	b := num("115792089237316195423570985008687907853269984665640564039457584007913129639935")
 	testing.expect_value(t, str(wide_div_floor(a, b)), "10000000000000000000000000000000000")
 	testing.expect_value(t, str(wide_div_floor(wide_mul(b, b), b)), str(b))

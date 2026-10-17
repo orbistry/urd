@@ -5,13 +5,13 @@ package base
 Hash28 :: [28]u8
 Hash32 :: [32]u8
 
-Block_Hash  :: distinct Hash32
-Tx_Id       :: distinct Hash32
-Key_Hash    :: distinct Hash28
+Block_Hash :: distinct Hash32
+Tx_Id :: distinct Hash32
+Key_Hash :: distinct Hash28
 Script_Hash :: distinct Hash28
 
-Slot     :: distinct u64
-Epoch    :: distinct u64
+Slot :: distinct u64
+Epoch :: distinct u64
 Block_No :: distinct u64
 
 // Ledger eras in hard-fork order. The numeric values are the era indices used
@@ -37,7 +37,9 @@ Point :: struct {
 }
 
 ORIGIN_SLOT :: Slot(max(u64))
-ORIGIN :: Point{slot = ORIGIN_SLOT}
+ORIGIN :: Point {
+	slot = ORIGIN_SLOT,
+}
 
 point_is_origin :: #force_inline proc "contextless" (p: Point) -> bool {
 	return p.slot == ORIGIN_SLOT

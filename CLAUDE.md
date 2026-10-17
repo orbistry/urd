@@ -9,6 +9,8 @@ decisions and the roadmap.
 - `just test src/cbor [cbor.test_x]`: one package, optionally one test.
   `just test-debug ...` builds the tests with debug info.
 - `just build` / `just debug` / `just check`.
+- `just fmt` / `just fmt-check`: odinfmt (Homebrew) with `odinfmt.json`. Run
+  `just fmt` before committing.
 - `just refs [name...]`: clone the reference repos into `refs/` (gitignored)
   at pinned commits (scripts/fetch-refs.sh).
 

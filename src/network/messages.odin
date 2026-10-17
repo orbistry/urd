@@ -121,7 +121,14 @@ Handshake_Result :: enum u8 {
 }
 
 // Decodes the responder's reply to MsgProposeVersions.
-read_handshake_reply :: proc(msg: []u8) -> (result: Handshake_Result, version: u64, data: N2N_Version_Data, err: cbor.Error) {
+read_handshake_reply :: proc(
+	msg: []u8,
+) -> (
+	result: Handshake_Result,
+	version: u64,
+	data: N2N_Version_Data,
+	err: cbor.Error,
+) {
 	r := cbor.reader(msg)
 	tag, n := read_msg_tag(&r) or_return
 	switch tag {
@@ -143,14 +150,14 @@ read_handshake_reply :: proc(msg: []u8) -> (result: Handshake_Result, version: u
 // Chain-sync
 
 Chain_Sync_Msg :: enum u8 {
-	Request_Next      = 0,
-	Await_Reply       = 1,
-	Roll_Forward      = 2,
-	Roll_Backward     = 3,
-	Find_Intersect    = 4,
-	Intersect_Found   = 5,
+	Request_Next        = 0,
+	Await_Reply         = 1,
+	Roll_Forward        = 2,
+	Roll_Backward       = 3,
+	Find_Intersect      = 4,
+	Intersect_Found     = 5,
 	Intersect_Not_Found = 6,
-	Done              = 7,
+	Done                = 7,
 }
 
 write_request_next :: proc(w: ^cbor.Writer) {

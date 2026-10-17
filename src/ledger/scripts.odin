@@ -208,11 +208,11 @@ PLUTUS_BYTES_CHUNK_MAX :: 64
 // definite string or per chunk of an indefinite one; maps keep duplicates.
 validate_plutus_data :: proc(r: ^cbor.Reader) -> Error {
 	Frame :: struct {
-		c:       cbor.Container,
+		c:           cbor.Container,
 		// Items still owed by a definite container (maps count two per entry).
-		left:    u64,
+		left:        u64,
 		// Closing this list also closes a `102` constructor wrapper.
-		wrapper: cbor.Container,
+		wrapper:     cbor.Container,
 		has_wrapper: bool,
 	}
 	stack: Stack(Frame)
@@ -227,7 +227,9 @@ validate_plutus_data :: proc(r: ^cbor.Reader) -> Error {
 			return bounded_bytes_after_head(r, h)
 		case .Array, .Map:
 			per: u64 = 1 if h.major == .Array else 2
-			f := Frame{c = cbor.Container{indefinite = h.info == cbor.INFO_INDEFINITE}}
+			f := Frame {
+				c = cbor.Container{indefinite = h.info == cbor.INFO_INDEFINITE},
+			}
 			if !f.c.indefinite {
 				if h.arg > u64(cbor.remaining(r)) / per do return .Eof
 				f.left = h.arg * per
@@ -260,7 +262,11 @@ validate_plutus_data :: proc(r: ^cbor.Reader) -> Error {
 
 	list_frame :: proc(r: ^cbor.Reader, stack: ^Stack(Frame), wrapper: cbor.Container, has_wrapper: bool) -> Error {
 		c := cbor.read_array(r) or_return
-		f := Frame{c = c, wrapper = wrapper, has_wrapper = has_wrapper}
+		f := Frame {
+			c           = c,
+			wrapper     = wrapper,
+			has_wrapper = has_wrapper,
+		}
 		if !c.indefinite do f.left = u64(c.n)
 		stack_push(stack, f)
 		return .None
@@ -371,7 +377,9 @@ validate_metadatum :: proc(d: ^Decoder) -> Error {
 			return .None
 		case .Array, .Map:
 			per: u64 = 1 if h.major == .Array else 2
-			f := Frame{c = cbor.Container{indefinite = h.info == cbor.INFO_INDEFINITE}}
+			f := Frame {
+				c = cbor.Container{indefinite = h.info == cbor.INFO_INDEFINITE},
+			}
 			if !f.c.indefinite {
 				if h.arg > u64(cbor.remaining(r)) / per do return .Eof
 				f.left = h.arg * per

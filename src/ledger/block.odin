@@ -59,17 +59,17 @@ decode_envelope :: proc(data: []u8) -> (env: Envelope, err: cbor.Error) {
 
 // Raw parts of a Shelley-family block, before the transactions are decoded.
 Block_Parts :: struct {
-	header:       Header,
+	header:    Header,
 	// Each part's original bytes; the body hash is computed over them.
-	bodies:       []u8,
-	witnesses:    []u8,
-	aux_data:     []u8,
+	bodies:    []u8,
+	witnesses: []u8,
+	aux_data:  []u8,
 	// Alonzo onwards: the list of phase-2 invalid transaction indices.
-	invalid:      []u8,
+	invalid:   []u8,
 	// Size of the block body (everything after the header) as the header's
 	// `body_size` counts it.
-	body_size:    int,
-	body_hash:    base.Hash32,
+	body_size: int,
+	body_hash: base.Hash32,
 }
 
 // Splits a Shelley-family block into its header and body parts, decoding the
@@ -132,7 +132,13 @@ Block :: struct {
 decode_block :: proc(block: []u8, era: base.Era, t: ^Block_Tables, b: ^Block) -> (err: Error) {
 	assert(era >= .Shelley)
 	tables_reset(t)
-	d := Decoder{r = cbor.reader(block), v = era_decoder_version(era), era = era, base = block, t = t}
+	d := Decoder {
+		r    = cbor.reader(block),
+		v    = era_decoder_version(era),
+		era  = era,
+		base = block,
+		t    = t,
+	}
 	defer if err != .None do last_error_pos = d.r.pos
 	b.era = era
 
@@ -265,7 +271,13 @@ sort_ints :: proc(xs: []int) {
 decode_tx :: proc(data: []u8, era: base.Era, t: ^Block_Tables) -> (err: Error) {
 	assert(era >= .Shelley)
 	tables_reset(t)
-	d := Decoder{r = cbor.reader(data), v = era_decoder_version(era), era = era, base = data, t = t}
+	d := Decoder {
+		r    = cbor.reader(data),
+		v    = era_decoder_version(era),
+		era  = era,
+		base = data,
+		t    = t,
+	}
 	defer if err != .None do last_error_pos = d.r.pos
 	c := read_rec(&d, 4 if era >= .Alonzo else 3) or_return
 
@@ -306,7 +318,13 @@ last_error_pos: int
 // Decodes a standalone transaction body.
 decode_tx_body :: proc(data: []u8, era: base.Era, t: ^Block_Tables) -> (err: Error) {
 	tables_reset(t)
-	d := Decoder{r = cbor.reader(data), v = era_decoder_version(era), era = era, base = data, t = t}
+	d := Decoder {
+		r    = cbor.reader(data),
+		v    = era_decoder_version(era),
+		era  = era,
+		base = data,
+		t    = t,
+	}
 	defer if err != .None do last_error_pos = d.r.pos
 	tx: Tx
 	read_tx_body(&d, &tx) or_return

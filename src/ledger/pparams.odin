@@ -57,19 +57,19 @@ Nonce :: struct {
 // A partial protocol parameter update. `ints` holds every integer-valued
 // parameter, indexed by its key.
 PParams_Update :: struct {
-	present:          PParam_Set,
-	ints:             [PParam]u64,
-	ratios:           [PParam]Ratio,
-	extra_entropy:    Nonce,
-	pv_major:         u32,
-	pv_minor:         u32,
-	cost_models:      Range,
-	prices_mem:       Ratio,
-	prices_steps:     Ratio,
-	max_tx_ex:        Ex_Units,
-	max_block_ex:     Ex_Units,
-	pool_thresholds:  [5]Ratio,
-	drep_thresholds:  [10]Ratio,
+	present:         PParam_Set,
+	ints:            [PParam]u64,
+	ratios:          [PParam]Ratio,
+	extra_entropy:   Nonce,
+	pv_major:        u32,
+	pv_minor:        u32,
+	cost_models:     Range,
+	prices_mem:      Ratio,
+	prices_steps:    Ratio,
+	max_tx_ex:       Ex_Units,
+	max_block_ex:    Ex_Units,
+	pool_thresholds: [5]Ratio,
+	drep_thresholds: [10]Ratio,
 }
 
 Cost_Model :: struct {
@@ -92,9 +92,46 @@ Update_Proposal :: struct {
 // Parameters each era's PParamsUpdate accepts.
 @(private = "file")
 era_params :: proc "contextless" (era: base.Era) -> PParam_Set {
-	shelley := PParam_Set{.Min_Fee_A, .Min_Fee_B, .Max_Block_Body_Size, .Max_Tx_Size, .Max_Block_Header_Size, .Key_Deposit, .Pool_Deposit, .E_Max, .N_Opt, .A0, .Rho, .Tau, .D, .Extra_Entropy, .Protocol_Version, .Min_UTxO_Value, .Min_Pool_Cost}
-	alonzo_new := PParam_Set{.Coins_Per_UTxO, .Cost_Models, .Prices, .Max_Tx_Ex_Units, .Max_Block_Ex_Units, .Max_Value_Size, .Collateral_Percentage, .Max_Collateral_Inputs}
-	conway_new := PParam_Set{.Pool_Voting_Thresholds, .Drep_Voting_Thresholds, .Committee_Min_Size, .Committee_Max_Term, .Gov_Action_Lifetime, .Gov_Action_Deposit, .Drep_Deposit, .Drep_Activity, .Min_Fee_Ref_Script_Cost}
+	shelley := PParam_Set {
+		.Min_Fee_A,
+		.Min_Fee_B,
+		.Max_Block_Body_Size,
+		.Max_Tx_Size,
+		.Max_Block_Header_Size,
+		.Key_Deposit,
+		.Pool_Deposit,
+		.E_Max,
+		.N_Opt,
+		.A0,
+		.Rho,
+		.Tau,
+		.D,
+		.Extra_Entropy,
+		.Protocol_Version,
+		.Min_UTxO_Value,
+		.Min_Pool_Cost,
+	}
+	alonzo_new := PParam_Set {
+		.Coins_Per_UTxO,
+		.Cost_Models,
+		.Prices,
+		.Max_Tx_Ex_Units,
+		.Max_Block_Ex_Units,
+		.Max_Value_Size,
+		.Collateral_Percentage,
+		.Max_Collateral_Inputs,
+	}
+	conway_new := PParam_Set {
+		.Pool_Voting_Thresholds,
+		.Drep_Voting_Thresholds,
+		.Committee_Min_Size,
+		.Committee_Max_Term,
+		.Gov_Action_Lifetime,
+		.Gov_Action_Deposit,
+		.Drep_Deposit,
+		.Drep_Activity,
+		.Min_Fee_Ref_Script_Cost,
+	}
 	switch era {
 	case .Byron:
 		return {}
@@ -177,9 +214,23 @@ read_pparams_update :: proc(d: ^Decoder) -> (index: u32, err: Error) {
 		}
 		u.present += {p}
 		#partial switch p {
-		case .Min_Fee_A, .Min_Fee_B, .Key_Deposit, .Pool_Deposit, .Min_UTxO_Value, .Min_Pool_Cost, .Coins_Per_UTxO, .Gov_Action_Deposit, .Drep_Deposit:
+		case .Min_Fee_A,
+		     .Min_Fee_B,
+		     .Key_Deposit,
+		     .Pool_Deposit,
+		     .Min_UTxO_Value,
+		     .Min_Pool_Cost,
+		     .Coins_Per_UTxO,
+		     .Gov_Action_Deposit,
+		     .Drep_Deposit:
 			u.ints[p] = cbor.read_uint(&d.r) or_return
-		case .Max_Block_Body_Size, .Max_Tx_Size, .E_Max, .Max_Value_Size, .Committee_Max_Term, .Gov_Action_Lifetime, .Drep_Activity:
+		case .Max_Block_Body_Size,
+		     .Max_Tx_Size,
+		     .E_Max,
+		     .Max_Value_Size,
+		     .Committee_Max_Term,
+		     .Gov_Action_Lifetime,
+		     .Drep_Activity:
 			u.ints[p] = u64(cbor.read_u32(&d.r) or_return)
 		case .Max_Block_Header_Size, .N_Opt, .Collateral_Percentage, .Max_Collateral_Inputs, .Committee_Min_Size:
 			u.ints[p] = u64(cbor.read_u16(&d.r) or_return)
@@ -245,7 +296,9 @@ read_cost_models :: proc(d: ^Decoder) -> (r: Range, err: Error) {
 			if l < 0 || l > 1 do return {}, .Invalid_Value
 			lang = u8(l)
 		}
-		cm := Cost_Model{language = lang}
+		cm := Cost_Model {
+			language = lang,
+		}
 		cm.values.start = u32(len(d.t.cost_values))
 		vals := cbor.read_array(&d.r) or_return
 		for cbor.more(&d.r, &vals) {
@@ -258,7 +311,11 @@ read_cost_models :: proc(d: ^Decoder) -> (r: Range, err: Error) {
 		}
 		append(&d.t.cost_models, cm)
 	}
-	n := sort_map_rows(d, d.t.cost_models[r.start:], proc(a, b: Cost_Model) -> bool {return a.language < b.language}) or_return
+	n := sort_map_rows(
+		d,
+		d.t.cost_models[r.start:],
+		proc(a, b: Cost_Model) -> bool {return a.language < b.language},
+	) or_return
 	resize(&d.t.cost_models, int(r.start) + n)
 	r.count = u32(n)
 	return r, .None

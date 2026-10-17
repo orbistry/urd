@@ -13,11 +13,11 @@ Gov_Action_Id :: struct {
 }
 
 Voter_Kind :: enum u8 {
-	Committee_Key  = 0,
+	Committee_Key    = 0,
 	Committee_Script = 1,
-	Drep_Key       = 2,
-	Drep_Script    = 3,
-	Pool           = 4,
+	Drep_Key         = 2,
+	Drep_Script      = 3,
+	Pool             = 4,
 }
 
 Vote_Choice :: enum u8 {
@@ -147,7 +147,10 @@ read_voting_procedures :: proc(d: ^Decoder) -> (r: Range, err: Error) {
 		inner := cbor.read_map(&d.r) or_return
 		first := len(d.t.votes)
 		for cbor.more(&d.r, &inner) {
-			v := Vote{voter_kind = voter_kind, voter = voter}
+			v := Vote {
+				voter_kind = voter_kind,
+				voter      = voter,
+			}
 			v.action = read_gov_action_id(d) or_return
 			read_recd(d, 2) or_return
 			choice := cbor.read_int(&d.r) or_return
@@ -172,7 +175,9 @@ read_voting_procedures :: proc(d: ^Decoder) -> (r: Range, err: Error) {
 		return gov_action_id_less(a.action, b.action)
 	})
 	for i in 1 ..< len(rows) {
-		if rows[i].voter_kind == rows[i - 1].voter_kind && rows[i].voter == rows[i - 1].voter && rows[i].action == rows[i - 1].action {
+		if rows[i].voter_kind == rows[i - 1].voter_kind &&
+		   rows[i].voter == rows[i - 1].voter &&
+		   rows[i].action == rows[i - 1].action {
 			return {}, .Duplicate_Key
 		}
 	}

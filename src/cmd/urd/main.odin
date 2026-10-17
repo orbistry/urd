@@ -137,7 +137,12 @@ fetch :: proc(args: []string) -> int {
 		fmt.eprintfln("no intersection at %v (%v)", start, ierr)
 		return 1
 	}
-	fmt.printfln("intersection at slot %d; peer tip at slot %d, block %d", u64(at.slot), u64(tip.point.slot), tip.block_no)
+	fmt.printfln(
+		"intersection at slot %d; peer tip at slot %d, block %d",
+		u64(at.slot),
+		u64(tip.point.slot),
+		tip.block_no,
+	)
 
 	w: immutable.Writer
 	if immutable.writer_init(&w, out, cfg.chunk_size) != .None {
@@ -198,8 +203,19 @@ fetch :: proc(args: []string) -> int {
 
 		header_secs := time.duration_seconds(time.tick_since(phase))
 		phase = time.tick_now()
-		state := Fetch_State{writer = &w, expected = infos[:], last = link, has_last = has_link}
-		ok, ferr := network.client_fetch_range(&client, infos[0].point, infos[len(infos) - 1].point, store_block, &state)
+		state := Fetch_State {
+			writer   = &w,
+			expected = infos[:],
+			last     = link,
+			has_last = has_link,
+		}
+		ok, ferr := network.client_fetch_range(
+			&client,
+			infos[0].point,
+			infos[len(infos) - 1].point,
+			store_block,
+			&state,
+		)
 		if ferr != .None || !ok || state.err != "" || state.next != len(infos) {
 			fmt.eprintfln("block-fetch: %v %v %s (%d/%d)", ferr, ok, state.err, state.next, len(infos))
 			return 1

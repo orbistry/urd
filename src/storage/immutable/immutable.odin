@@ -123,7 +123,8 @@ chunk_load :: proc(c: ^Chunk, dir: string, number: u32, verify := false) -> Erro
 	// Relative slot 0 is the EBB slot. It is filled iff the second offset
 	// moved past the first.
 	offsets := c.primary[1:]
-	ebb_filled := len(offsets) >= 8 && endian.unchecked_get_u32be(offsets[4:]) > endian.unchecked_get_u32be(offsets[0:])
+	ebb_filled :=
+		len(offsets) >= 8 && endian.unchecked_get_u32be(offsets[4:]) > endian.unchecked_get_u32be(offsets[0:])
 
 	n := len(c.secondary) / SECONDARY_ENTRY_SIZE
 	resize(&c.entries, n)
