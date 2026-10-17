@@ -1,0 +1,207 @@
+# urd architecture
+
+urd is a Cardano full node written in Odin. It syncs and fully validates the
+chain from the Byron genesis, keeps its ledger state on disk, and speaks the
+Ouroboros node-to-node and node-to-client protocols.
+
+This document records the decisions that shape the code. When a decision
+changes, update this file in the same change.
+
+## Ground rules
+
+1. **Conformance first.** The Haskell `cardano-node` is the reference
+   behaviour, including its quirks. Every consensus-relevant piece is tested
+   against vectors produced by the Haskell implementation (see "Verification").
+   Where specs and the reference disagree, we follow the reference and
+   document it in a comment that points at the Haskell source.
+2. **Worst case is the only case.** Following the blueprint's principles, we
+   do not rely on caches or average-case behaviour that an adversary can
+   defeat. Every lookup on the validation path has a bounded cost.
+3. **Data-oriented.** Data is laid out by how it is processed:
+   struct-of-arrays tables, flat arrays indexed by `u32` instead of pointer
+   graphs, spans into original bytes instead of copies, per-block arenas
+   instead of per-object allocation. Hot loops touch contiguous memory.
+4. **Original bytes are sacred.** Cardano hashes the bytes as they were
+   serialised (headers, tx bodies, aux data, scripts, datums, redeemers).
+   We never re-encode in order to hash. Decoders return spans into the
+   source buffer.
+5. **No hidden allocation.** Hot-path procedures take explicit allocators or
+   write into caller-provided tables. The context allocator is only used at
+   the edges (startup, CLI, tests).
+6. **Vendor C only where correctness demands it.** BLS12-381 (`blst`) and
+   secp256k1 (`libsecp256k1`) are what Plutus uses, so we link exactly those.
+   Everything else is Odin.
+
+## Source layout
+
+Odin packages live under `src/` and are imported through the `urd`
+collection (`import "urd:cbor"`).
+
+| Package            | Purpose |
+|--------------------|---------|
+| `base`             | Fixed-size hashes, slots/epochs, points, eras, span utilities, arenas. |
+| `cbor`             | Zero-copy CBOR reader (spans, skip, strictness checks) and writer. |
+| `ccrypto`          | blake2b wrappers, libsodium-compatible Ed25519, Byron (donna) Ed25519, VRF draft-03/draft-13, Sum6 KES, RIPEMD-160, bindings for blst and libsecp256k1. |
+| `ledger/*`         | Per-era decoding into SoA block tables, ledger rules, epoch boundary, governance. |
+| `consensus/*`      | Hard-fork combinator (era history), PBFT, TPraos, Praos, nonces, chain selection. |
+| `plutus/*`         | Flat decoding, untyped Plutus core CEK machine, builtins, cost models, script context. |
+| `storage/*`        | ImmutableDB (cardano-node chunk format), VolatileDB, disk-backed ledger tables. |
+| `network/*`        | Multiplexer and the mini-protocol state machines (N2N and N2C). |
+| `mempool`          | Transaction validation queue and tx-submission serving. |
+| `node`             | Wiring: threads, event loop, configuration, tracing. |
+| `cmd/urd`          | The node binary. Other tools live in `cmd/<tool>`. |
+
+Tests sit next to the code as `*_test.odin`. Larger fixtures come from
+`refs/` (the cloned reference repositories, gitignored) and are located by
+path at test time.
+
+## Key designs
+
+### CBOR and decoding
+
+The reader works on a `[]u8` with a cursor. Every read returns a value plus an
+error that callers propagate with `or_return`. Besides typed reads it offers
+`skip` (structural skip without allocation) and `span` (the raw bytes of the
+next item), which is how we capture original bytes for hashing.
+
+Strictness differs by era and protocol version (duplicate map keys, set tags
+258, canonical integer widths, and so on). These are parameters of the
+ledger decoders, which mirror `cardano-ledger-binary`'s version-gated
+decoders, not global modes of the reader.
+
+### Blocks as tables
+
+A decoded block is a set of flat tables in a per-block arena, not a tree of
+objects:
+
+- `txs`: one row per transaction, holding the body span, the witness-set span,
+  the validity flag, fee, TTL, and so on, plus `[start, end)` ranges into the
+  tables below.
+- `inputs`, `outputs`, `certs`, `withdrawals`, `mint`, `vkey_witnesses`,
+  `scripts`, `datums`, `redeemers`, `votes`, `proposals`: flattened across the
+  whole block.
+
+Whole-block passes become linear scans. Examples are "verify every vkey
+witness", "collect every UTxO key to prefetch", and "hash every script".
+These scans parallelise trivially.
+
+### Ledger state on disk
+
+The ledger state follows the UTxO-HD shape:
+
+- **Anchor.** The ledger state at the immutable tip (k blocks back) lives on
+  disk.
+- **Changelog.** In memory, one diff per volatile block (at most k), stored
+  as SoA. A rollback drops diffs. As blocks become immutable, their diffs are
+  flushed into the anchor in batches.
+- **Block application is three phases.** (1) *Prepare*: scan the block tables
+  and collect every key the block touches (inputs, reference inputs,
+  collateral, credentials, pools, DReps, proposals). (2) *Fetch*: resolve the
+  keys in one batch, first from the changelog and then from disk, using
+  parallel I/O into a block-local working set. (3) *Validate*: run the rules
+  purely in memory against the working set and emit a diff. No rule ever
+  touches the disk directly.
+- **Table engine.** Large tables (UTxO and accounts) live in our own on-disk
+  engine. Keys are cryptographic hashes, so they are uniformly distributed.
+  The engine targets a bounded number of page reads per lookup, atomic
+  batched apply, and cheap snapshots (for epoch stake snapshots and
+  restarts). Its design is settled in its own milestone.
+- **Incremental stake.** Stake is aggregated per credential as the UTxO
+  changes, so epoch-boundary snapshots never rescan the UTxO.
+
+### Block storage
+
+The ImmutableDB uses cardano-node's on-disk format: `.chunk`, `.primary` and
+`.secondary` files. That buys three things:
+
+- Mithril snapshots and existing cardano-node databases are directly usable.
+- Test corpora built from real chunk files work as-is.
+- Byte-for-byte compatibility is easy to check.
+
+The VolatileDB, which holds the last k blocks and forks, uses our own simple
+format.
+
+### Consensus
+
+- **Hard-fork combinator.** The era history is derived from the genesis
+  files and the protocol-version transitions, and maps slots to epochs and
+  times.
+- **Byron** uses PBFT, with signatures from genesis delegates and the
+  signing-window threshold.
+- **Shelley to Alonzo** use TPraos (two VRF outputs, 512-bit leader values).
+  **Babbage onwards** uses Praos (a single VRF with range extension, 256-bit
+  leader values).
+- **Leader check** uses the exact fixed-point `ln`/`exp` arithmetic of
+  `cardano-ledger`'s non-integral library, tested against its 100k golden
+  lines.
+- **Chain selection** prefers the longest chain within the k-deep rollback
+  bound, with the reference tie-breakers (opcert issue number, then VRF).
+  Ouroboros Genesis comes later.
+
+### Crypto
+
+- **Ed25519** comes in two flavours, both built on `core:crypto/_edwards25519`:
+  - *libsodium-exact* (Shelley onwards): S canonical, R and A not small
+    order, A canonical, cofactorless equation. Odin's `core:crypto/ed25519`
+    is deliberately stricter and cofactored, so it is *not* used for
+    consensus.
+  - *ed25519-donna* (Byron-era witnesses): permissive.
+- **VRF** follows IETF draft-03 (Praos) and draft-13 (batch-compatible), with
+  libsodium's Elligator2 quirks.
+- **KES** is Sum6 over Ed25519 and Blake2b-256 (verification only on the
+  validation path).
+- **blst** and **libsecp256k1** are vendored and built into static libraries
+  by the build script.
+
+### Plutus
+
+Flat-encoded programs are decoded into an SoA term arena (tags plus payload
+indices). The CEK machine runs over that arena with a per-evaluation bump
+allocator that is reset between scripts. Builtins and costing follow the
+plutus repository's cost-model JSON files, one per semantics variant.
+Phase-2 scripts within a block are independent once inputs are resolved, so
+they evaluate in parallel.
+
+### Concurrency
+
+- One I/O thread runs the `core:nbio` event loop, which drives the
+  multiplexer and the mini-protocols.
+- A worker pool runs decoding, header crypto (VRF and KES), witness
+  verification and script evaluation.
+- Ledger application is sequential per block and parallel within a block.
+
+## Verification
+
+| Area | Source of truth |
+|------|-----------------|
+| CBOR, blocks | ouroboros-consensus goldens (`ouroboros-consensus-cardano/golden`), pallas `test_data`, the dingo preview ImmutableDB corpus (300 chunks), ledger CDDLs. |
+| Crypto | cardano-base VRF, KES and BLS vectors; plutus builtin conformance cases; hash-parity goldens. |
+| Leader math | `cardano-ledger/libs/non-integral/reference` golden tests; pallas `node-vectors.tsv`. |
+| Headers | amaru `header-test-cases.json` (Haskell-generated mutations). |
+| Ledger rules | cardano-blueprint conformance vectors (2574, Conway ImpSpec); amaru tx scenarios. |
+| Plutus | `plutus-conformance` (UPLC, flat, budgets). |
+| End to end | Replay preview, preprod and mainnet from genesis, comparing epoch stake distributions, nonces and ledger-state hashes against cardano-node. |
+
+## Roadmap
+
+Each milestone ends with its verification suite passing.
+
+1. **Foundation.** Build script, base types, CBOR reader and writer, blake2b.
+2. **Blocks.** Decode every era (Byron EBB/main through Conway, Dijkstra
+   later) into block tables. Decode the full preview corpus and all goldens.
+3. **ImmutableDB.** Read and write chunk files; iterate a whole database.
+4. **Crypto.** Ed25519 (both flavours), VRF, KES, RIPEMD-160; vendor blst and
+   libsecp256k1.
+5. **Network client.** Mux, handshake, chain-sync, block-fetch and keep-alive.
+   Sync preview from a public relay into our ImmutableDB.
+6. **Byron.** PBFT and the Byron ledger (UTxO, delegation, update system).
+   Replay the Byron era.
+7. **Ledger store.** On-disk table engine and changelog.
+8. **Shelley to Conway.** Ledger rules, epoch boundary (snapshots, rewards,
+   pool reap), governance, TPraos and Praos header validation. Replay preview
+   and preprod.
+9. **Plutus.** Phase-2 validation (V1 to V3), script context construction.
+10. **Full node.** Chain selection with rollbacks, VolatileDB, mempool,
+    tx-submission, N2N responders, N2C protocols, peer selection.
+11. **Beyond.** Block forging, Mithril bootstrap, Ouroboros Genesis,
+    Dijkstra, Leios.
