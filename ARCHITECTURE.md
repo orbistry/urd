@@ -73,19 +73,29 @@ decoders, not global modes of the reader.
 
 ### Blocks as tables
 
-A decoded block is a set of flat tables in a per-block arena, not a tree of
-objects:
+A decoded block is a set of flat tables (`ledger.Block_Tables`), not a tree
+of objects:
 
 - `txs`: one row per transaction, holding the body span, the witness-set span,
-  the validity flag, fee, TTL, and so on, plus `[start, end)` ranges into the
-  tables below.
-- `inputs`, `outputs`, `certs`, `withdrawals`, `mint`, `vkey_witnesses`,
-  `scripts`, `datums`, `redeemers`, `votes`, `proposals`: flattened across the
-  whole block.
+  the validity flag, fee, TTL, and so on, plus ranges into the tables below.
+- `inputs`, `outputs`, `assets`, `mint`, `certs`, `withdrawals`,
+  `vkey_witnesses`, `scripts`, `datums`, `redeemers`, `votes`, `proposals`:
+  flattened across the whole block.
 
 Whole-block passes become linear scans. Examples are "verify every vkey
 witness", "collect every UTxO key to prefetch", and "hash every script".
 These scans parallelise trivially.
+
+The tables are reused from block to block (`tables_reset` keeps their
+capacity), and everything temporary that decoding needs, such as duplicate
+checks and explicit stacks, comes from a per-block scratch arena owned by the
+tables. Steady-state decoding allocates nothing; `just bench` measures
+throughput and counts allocations to keep it that way.
+
+The rows are still structs (AoS). They will be split hot/cold or moved to
+`#soa` once the ledger rule passes exist, because the right columns depend on
+those passes' access patterns, and the change should be measured with the
+benchmark rather than guessed.
 
 ### Ledger state on disk
 

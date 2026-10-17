@@ -17,6 +17,8 @@ import "urd:storage/immutable"
 USAGE :: `usage: urd <command> [options]
 
 commands:
+  bench-decode DIR [--passes N]
+          decoding throughput over an ImmutableDB, and allocations in steady state
   diag    print CBOR (a file, or hex with --hex) in diagnostic notation
   fetch   pull blocks from a peer into an ImmutableDB directory
           --network mainnet|preprod|preview   (default preview)
@@ -53,6 +55,8 @@ main :: proc() {
 	switch args[0] {
 	case "fetch":
 		os.exit(fetch(args[1:]))
+	case "bench-decode":
+		os.exit(bench_decode(args[1:]))
 	case "diag":
 		os.exit(diag(args[1:]))
 	case:

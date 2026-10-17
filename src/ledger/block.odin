@@ -132,13 +132,7 @@ Block :: struct {
 decode_block :: proc(block: []u8, era: base.Era, t: ^Block_Tables, b: ^Block) -> (err: Error) {
 	assert(era >= .Shelley)
 	tables_reset(t)
-	d := Decoder {
-		r    = cbor.reader(block),
-		v    = era_decoder_version(era),
-		era  = era,
-		base = block,
-		t    = t,
-	}
+	d := make_decoder(block, era, t)
 	defer if err != .None do last_error_pos = d.r.pos
 	b.era = era
 
@@ -179,7 +173,7 @@ decode_block :: proc(block: []u8, era: base.Era, t: ^Block_Tables, b: ^Block) ->
 	// last-wins below v9 and fail from v9; every index must name a body.
 	aux_start := d.r.pos
 	aux := cbor.read_map(&d.r) or_return
-	seen_aux := make([dynamic]int, context.temp_allocator)
+	seen_aux := make([dynamic]int, d.scratch)
 	for cbor.more(&d.r, &aux) {
 		idx := cbor.read_int(&d.r) or_return
 		start := d.r.pos
@@ -204,7 +198,7 @@ decode_block :: proc(block: []u8, era: base.Era, t: ^Block_Tables, b: ^Block) ->
 	invalid_bytes: []u8
 	if era >= .Alonzo {
 		inv_start := d.r.pos
-		idxs := make([dynamic]i64, context.temp_allocator)
+		idxs := make([dynamic]i64, d.scratch)
 		inv := cbor.read_array(&d.r) or_return
 		for cbor.more(&d.r, &inv) {
 			v := cbor.read_int(&d.r) or_return
@@ -271,13 +265,7 @@ sort_ints :: proc(xs: []int) {
 decode_tx :: proc(data: []u8, era: base.Era, t: ^Block_Tables) -> (err: Error) {
 	assert(era >= .Shelley)
 	tables_reset(t)
-	d := Decoder {
-		r    = cbor.reader(data),
-		v    = era_decoder_version(era),
-		era  = era,
-		base = data,
-		t    = t,
-	}
+	d := make_decoder(data, era, t)
 	defer if err != .None do last_error_pos = d.r.pos
 	c := read_rec(&d, 4 if era >= .Alonzo else 3) or_return
 
@@ -318,13 +306,7 @@ last_error_pos: int
 // Decodes a standalone transaction body.
 decode_tx_body :: proc(data: []u8, era: base.Era, t: ^Block_Tables) -> (err: Error) {
 	tables_reset(t)
-	d := Decoder {
-		r    = cbor.reader(data),
-		v    = era_decoder_version(era),
-		era  = era,
-		base = data,
-		t    = t,
-	}
+	d := make_decoder(data, era, t)
 	defer if err != .None do last_error_pos = d.r.pos
 	tx: Tx
 	read_tx_body(&d, &tx) or_return

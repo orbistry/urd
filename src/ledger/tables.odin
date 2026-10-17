@@ -1,5 +1,8 @@
 package ledger
 
+import "base:runtime"
+import vmem "core:mem/virtual"
+
 import "urd:base"
 
 // A contiguous run of rows in one of the block tables.
@@ -127,7 +130,7 @@ Block_Tables :: struct {
 	ref_inputs:       [dynamic]Tx_In,
 	outputs:          [dynamic]Tx_Out,
 	assets:           [dynamic]Asset,
-	mint:             [dynamic]Asset,
+	mint:             [dynamic]Mint,
 	withdrawals:      [dynamic]Withdrawal,
 	required_signers: [dynamic]base.Key_Hash,
 	certs:            [dynamic]Cert,
@@ -150,16 +153,29 @@ Block_Tables :: struct {
 	datums:           [dynamic]Datum,
 	redeemers:        [dynamic]Redeemer,
 	aux_scripts:      [dynamic]Script,
+	// Scratch memory for decoding one block (see Decoder.scratch). Reserved
+	// address space, committed as needed, emptied by `tables_reset`.
+	scratch:          vmem.Arena,
+}
+
+// Address space reserved for a block's scratch; only what is used is
+// committed. A block's scratch use is bounded by a small multiple of its size.
+SCRATCH_RESERVE :: 1 << 30
+
+tables_scratch :: proc(t: ^Block_Tables) -> runtime.Allocator {
+	return vmem.arena_allocator(&t.scratch)
 }
 
 tables_init :: proc(t: ^Block_Tables, allocator := context.allocator) {
+	err := vmem.arena_init_static(&t.scratch, SCRATCH_RESERVE)
+	assert(err == nil, "cannot reserve block scratch")
 	t.txs = make([dynamic]Tx, allocator)
 	t.inputs = make([dynamic]Tx_In, allocator)
 	t.collateral = make([dynamic]Tx_In, allocator)
 	t.ref_inputs = make([dynamic]Tx_In, allocator)
 	t.outputs = make([dynamic]Tx_Out, allocator)
 	t.assets = make([dynamic]Asset, allocator)
-	t.mint = make([dynamic]Asset, allocator)
+	t.mint = make([dynamic]Mint, allocator)
 	t.withdrawals = make([dynamic]Withdrawal, allocator)
 	t.required_signers = make([dynamic]base.Key_Hash, allocator)
 	t.certs = make([dynamic]Cert, allocator)
@@ -185,6 +201,7 @@ tables_init :: proc(t: ^Block_Tables, allocator := context.allocator) {
 }
 
 tables_reset :: proc(t: ^Block_Tables) {
+	vmem.arena_free_all(&t.scratch)
 	clear(&t.txs)
 	clear(&t.inputs)
 	clear(&t.collateral)
@@ -217,6 +234,7 @@ tables_reset :: proc(t: ^Block_Tables) {
 }
 
 tables_destroy :: proc(t: ^Block_Tables) {
+	vmem.arena_destroy(&t.scratch)
 	delete(t.txs)
 	delete(t.inputs)
 	delete(t.collateral)

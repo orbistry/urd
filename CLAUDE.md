@@ -9,6 +9,8 @@ decisions and the roadmap.
 - `just test src/cbor [cbor.test_x]`: one package, optionally one test.
   `just test-debug ...` builds the tests with debug info.
 - `just build` / `just debug` / `just check`.
+- `just bench [DB]`: block-decoding throughput, and allocations in steady state
+  (must stay 0).
 - `just fmt` / `just fmt-check`: odinfmt (Homebrew) with `odinfmt.json`. Run
   `just fmt` before committing.
 - `just refs [name...]`: clone the reference repos into `refs/` (gitignored)
@@ -29,8 +31,9 @@ The shell is zsh-like: quote globs (`--include='*.hs'`), and don't start an
   globally unique (hence `ccrypto`, not `crypto`).
 - Procedures that use `or_return` with several results must name them.
 - Hot paths take explicit allocators or caller-owned buffers. No hidden
-  allocation, and nothing on the validation path whose cost an adversary can
-  inflate.
+  allocation (decoders use `Decoder.scratch`, never `context.temp_allocator`),
+  and nothing on the validation path whose cost an adversary can inflate: no
+  quadratic loops over attacker-sized input.
 - Decoders follow the Haskell decoders exactly, not the CDDL. Cite the
   Haskell source (file and function) in a comment when a rule is subtle.
   Blocks of era E decode at `eraProtVerLow E`: Shelley 2, Allegra 3, Mary 4,

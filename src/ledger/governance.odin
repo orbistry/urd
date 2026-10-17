@@ -132,7 +132,7 @@ gov_action_id_less :: proc "contextless" (a, b: Gov_Action_Id) -> bool {
 // Rows are left sorted by (voter, action), the ledger's map order.
 read_voting_procedures :: proc(d: ^Decoder) -> (r: Range, err: Error) {
 	r.start = u32(len(d.t.votes))
-	voters := make([dynamic]Vote, context.temp_allocator)
+	voters := make([dynamic]Vote, d.scratch)
 	outer := cbor.read_map(&d.r) or_return
 	for cbor.more(&d.r, &outer) {
 		tag, c := read_sum(d) or_return

@@ -9,18 +9,20 @@ import "urd:base"
 // Appends blocks to an ImmutableDB directory in cardano-node's format.
 // Blocks must arrive in chain order.
 Writer :: struct {
-	dir:        string,
+	dir:         string,
 	// Regular slots per chunk (10k: 21600 on mainnet and preprod, 4320 on
 	// preview).
-	chunk_size: u64,
-	chunk:      u32,
-	is_open:    bool,
-	chunk_file: ^os.File,
-	chunk_len:  u64,
+	chunk_size:  u64,
+	chunk:       u32,
+	is_open:     bool,
+	chunk_file:  ^os.File,
+	chunk_len:   u64,
 	// Secondary-index offset of each relative slot so far, plus the end
 	// offset: `len(primary) == last filled relative slot + 2`.
-	primary:    [dynamic]u32,
-	secondary:  [dynamic]u8,
+	primary:     [dynamic]u32,
+	secondary:   [dynamic]u8,
+	// Encoding buffer for the primary index file, reused across chunks.
+	primary_buf: [dynamic]u8,
 }
 
 Append_Info :: struct {
@@ -44,6 +46,7 @@ writer_init :: proc(w: ^Writer, dir: string, chunk_size: u64, allocator := conte
 	w.chunk_size = chunk_size
 	w.primary = make([dynamic]u32, allocator)
 	w.secondary = make([dynamic]u8, allocator)
+	w.primary_buf = make([dynamic]u8, allocator)
 	return .None
 }
 
@@ -56,6 +59,7 @@ writer_close :: proc(w: ^Writer) -> Error {
 	}
 	delete(w.primary)
 	delete(w.secondary)
+	delete(w.primary_buf)
 	return err
 }
 
@@ -132,7 +136,8 @@ close_chunk :: proc(w: ^Writer, finalise: bool) -> Error {
 			append(&w.primary, w.primary[len(w.primary) - 1])
 		}
 	}
-	primary := make([]u8, 1 + 4 * len(w.primary), context.temp_allocator)
+	resize(&w.primary_buf, 1 + 4 * len(w.primary))
+	primary := w.primary_buf[:]
 	primary[0] = PRIMARY_VERSION
 	for off, i in w.primary {
 		endian.unchecked_put_u32be(primary[1 + 4 * i:], off)

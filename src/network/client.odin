@@ -81,9 +81,8 @@ client_keep_alive :: proc(c: ^Client) -> Client_Error {
 		return .None
 	}
 	c.keep_alive_cookie += 1
-	ka: cbor.Writer = cbor.writer(context.temp_allocator, 16)
-	write_keep_alive(&ka, c.keep_alive_cookie)
-	mux_send(&c.mux, .Keep_Alive, cbor.writer_bytes(&ka))
+	buf: [KEEP_ALIVE_MAX_SIZE]u8
+	mux_send(&c.mux, .Keep_Alive, encode_keep_alive(buf[:], c.keep_alive_cookie))
 	c.keep_alive_pending = true
 	c.keep_alive_at = time.tick_now()
 	return .None

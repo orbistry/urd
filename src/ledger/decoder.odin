@@ -1,5 +1,7 @@
 package ledger
 
+import "base:runtime"
+
 import "urd:base"
 import "urd:cbor"
 
@@ -32,18 +34,31 @@ era_decoder_version :: proc "contextless" (era: base.Era) -> u32 {
 // is decoded into. `base` is the buffer every `Span` is relative to (the era
 // block), which also covers CBOR-in-CBOR payloads decoded with a sub-reader.
 Decoder :: struct {
-	r:    cbor.Reader,
-	v:    u32,
-	era:  base.Era,
-	base: []u8,
-	t:    ^Block_Tables,
+	r:       cbor.Reader,
+	v:       u32,
+	era:     base.Era,
+	base:    []u8,
+	t:       ^Block_Tables,
+	// Per-block scratch (the tables' arena): temporary arrays for duplicate
+	// checks and explicit stacks. Released when the tables are reset.
+	scratch: runtime.Allocator,
+}
+
+// A decoder over `data` writing into `t`, at the era's decoder version.
+make_decoder :: proc(data: []u8, era: base.Era, t: ^Block_Tables) -> Decoder {
+	scratch := tables_scratch(t)
+	r := cbor.reader(data)
+	r.scratch = scratch
+	return Decoder{r = r, v = era_decoder_version(era), era = era, base = data, t = t, scratch = scratch}
 }
 
 Error :: cbor.Error
 
 @(private)
 sub_decoder :: proc "contextless" (d: ^Decoder, payload: []u8) -> Decoder {
-	return Decoder{r = cbor.reader(payload), v = d.v, era = d.era, base = d.base, t = d.t}
+	r := cbor.reader(payload)
+	r.scratch = d.scratch
+	return Decoder{r = r, v = d.v, era = d.era, base = d.base, t = d.t, scratch = d.scratch}
 }
 
 span :: #force_inline proc "contextless" (d: ^Decoder, b: []u8) -> base.Span {

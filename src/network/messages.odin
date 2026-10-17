@@ -261,10 +261,15 @@ read_block_fetch_reply :: proc(msg: []u8) -> (kind: Block_Fetch_Msg, block: []u8
 // ---------------------------------------------------------------------------
 // Keep-alive
 
-write_keep_alive :: proc(w: ^cbor.Writer, cookie: u16) {
-	cbor.write_array(w, 2)
-	cbor.write_uint(w, 0)
-	cbor.write_uint(w, u64(cookie))
+// Encoded size bound of MsgKeepAlive: array head, tag, Word16 cookie.
+KEEP_ALIVE_MAX_SIZE :: 1 + 1 + 3
+
+// MsgKeepAlive `[0, cookie]` into a caller buffer of KEEP_ALIVE_MAX_SIZE.
+encode_keep_alive :: proc "contextless" (buf: []u8, cookie: u16) -> []u8 {
+	buf[0] = 0x82
+	buf[1] = 0x00
+	n := cbor.put_head(buf[2:], .Unsigned, u64(cookie))
+	return buf[:2 + n]
 }
 
 read_keep_alive_response :: proc(msg: []u8) -> (cookie: u16, err: cbor.Error) {

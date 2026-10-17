@@ -12,6 +12,7 @@
 // belongs to the callers.
 package cbor
 
+import "base:runtime"
 import "core:encoding/endian"
 
 Error :: enum u8 {
@@ -76,8 +77,12 @@ Head :: struct {
 }
 
 Reader :: struct {
-	data: []u8,
-	pos:  int,
+	data:    []u8,
+	pos:     int,
+	// Where `skip` spills its stack for indefinite containers nested deeper
+	// than SKIP_INLINE_DEPTH. Decoders on the validation path set it to their
+	// per-block scratch arena; when unset, `context.temp_allocator` is used.
+	scratch: runtime.Allocator,
 }
 
 // Container length as read from an array or map head. An indefinite container
@@ -554,7 +559,7 @@ is_null :: #force_inline proc "contextless" (r: ^Reader) -> bool #no_bounds_chec
 // Skipping and spans
 
 // Inline capacity of the indefinite-container stack used by `skip`. Deeper
-// nesting spills to `context.temp_allocator`; honest chain data never does.
+// nesting spills to `Reader.scratch`; honest chain data never does.
 SKIP_INLINE_DEPTH :: 64
 
 // Skips one complete data item, checking that it is well formed.
@@ -566,9 +571,8 @@ SKIP_INLINE_DEPTH :: 64
 skip :: proc(r: ^Reader) -> Error {
 	inline_stack: [SKIP_INLINE_DEPTH]u64
 	spill: [dynamic]u64
-	spill.allocator = context.temp_allocator
+	spill.allocator = r.scratch if r.scratch.procedure != nil else context.temp_allocator
 	depth := 0
-	defer if spill != nil do delete(spill)
 
 	pending: u64 = 1
 	for {

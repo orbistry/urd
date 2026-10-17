@@ -7,24 +7,35 @@ import "urd:cbor"
 
 // Values and multi-assets, docs/decoding/txbody.md §5
 // (cardano-ledger mary Cardano/Ledger/Mary/Value.hs).
+//
+// The ledger's quantities are Haskell `Integer`s, but the decoders bound
+// them: output quantities are Word64 and mint quantities Int64, so each fits
+// 64 bits exactly. Arithmetic over them (value preservation) must use i128
+// accumulators: a transaction has fewer than 2^32 terms (maxTxSize is a
+// Word32), each below 2^64, so every sum stays under 2^96 and i128 matches the
+// unbounded Haskell arithmetic.
 
 ASSET_NAME_MAX :: 32
 
-// One multi-asset entry of an output value (quantity in 1..2^64-1) or of a
-// mint (non-zero Int64), flattened across the block. Names are at most 32
-// bytes, so they are stored inline. Within each value or mint the entries are
-// kept in the ledger's map order: by policy, then by name.
+// One multi-asset entry of an output value, flattened across the block. Names
+// are at most 32 bytes, so they are stored inline. Within each value the
+// entries are in the ledger's map order: by policy, then by name.
 Asset :: struct {
-	quantity: i128,
+	quantity: u64,
 	policy:   base.Hash28,
 	name:     [ASSET_NAME_MAX]u8,
 	name_len: u8,
-	// Decode order, used to resolve duplicate keys; meaningless afterwards.
-	group:    u32,
-	seq:      u32,
 }
 
-asset_name :: #force_inline proc "contextless" (a: ^Asset) -> []u8 {
+// One minted (positive) or burned (negative) asset; never zero after decoding.
+Mint :: struct {
+	quantity: i64,
+	policy:   base.Hash28,
+	name:     [ASSET_NAME_MAX]u8,
+	name_len: u8,
+}
+
+asset_name :: #force_inline proc "contextless" (a: ^$T) -> []u8 where T == Asset || T == Mint {
 	return a.name[:a.name_len]
 }
 
@@ -47,28 +58,31 @@ read_value :: proc(d: ^Decoder, assets: ^[dynamic]Asset) -> (coin: u64, entries:
 	}
 	read_recd(d, 2) or_return
 	coin = read_coin(d) or_return
-	read_multi_asset(d, assets, .Output) or_return
+	read_multi_asset(d, assets) or_return
 	entries.count = u32(len(assets)) - entries.start
 	return
 }
 
-Quantity_Kind :: enum u8 {
-	// TxOut value: Word64.
-	Output,
-	// Mint: decodeIntegerBounded64, major 0/1 within Int64, no bignums.
-	Mint,
+// A decoded entry before duplicate keys are resolved: `group` numbers the
+// occurrences of outer (policy) keys in decode order.
+@(private = "file")
+Pending :: struct($T: typeid) {
+	row:   T,
+	group: u32,
 }
 
-// `decodeMultiAsset`: { policy => { asset_name => quantity } }.
+// `decodeMultiAsset`: { policy => { asset_name => quantity } }, appending the
+// resolved rows to `out` (`Asset` for output values, `Mint` for the mint
+// field, which uses decodeIntegerBounded64: major 0/1 within Int64, no
+// bignums).
 //
 // Below v9 duplicate keys are last-wins (a repeated policy replaces the whole
 // inner map), zero quantities are pruned, and inner maps left empty are
 // dropped. From v9 duplicates, zeros and empty inner maps fail; an empty outer
 // map decodes. In every era the pruned result must fit the compact form:
 // 44 * assets + 28 * policies <= 65535.
-read_multi_asset :: proc(d: ^Decoder, out: ^[dynamic]Asset, kind: Quantity_Kind) -> Error {
-	start := len(out)
-	seq: u32
+read_multi_asset :: proc(d: ^Decoder, out: ^[dynamic]$T) -> Error where T == Asset || T == Mint {
+	pending := make([dynamic]Pending(T), d.scratch)
 	group: u32
 	outer := cbor.read_map(&d.r) or_return
 	for cbor.more(&d.r, &outer) {
@@ -80,26 +94,20 @@ read_multi_asset :: proc(d: ^Decoder, out: ^[dynamic]Asset, kind: Quantity_Kind)
 			if len(name) > ASSET_NAME_MAX {
 				return .Invalid_Value
 			}
-			q: i128
-			switch kind {
-			case .Output:
-				q = i128(cbor.read_uint(&d.r) or_return)
-			case .Mint:
-				q = i128(cbor.read_int(&d.r) or_return)
-			}
-			if q == 0 && d.v >= 9 {
-				return .Invalid_Value
-			}
-			a := Asset {
-				quantity = q,
+			row := T {
 				policy   = policy,
 				name_len = u8(len(name)),
-				group    = group,
-				seq      = seq,
 			}
-			copy(a.name[:], name)
-			append(out, a)
-			seq += 1
+			copy(row.name[:], name)
+			when T == Asset {
+				row.quantity = cbor.read_uint(&d.r) or_return
+			} else {
+				row.quantity = cbor.read_int(&d.r) or_return
+			}
+			if row.quantity == 0 && d.v >= 9 {
+				return .Invalid_Value
+			}
+			append(&pending, Pending(T){row = row, group = group})
 			n += 1
 		}
 		if n == 0 && d.v >= 9 {
@@ -108,24 +116,24 @@ read_multi_asset :: proc(d: ^Decoder, out: ^[dynamic]Asset, kind: Quantity_Kind)
 		group += 1
 	}
 
-	xs := out[start:]
-	slice.sort_by(xs, proc(a, b: Asset) -> bool {
+	// Stable: entries with equal keys keep their decode order, so the last of
+	// a run is the last decoded.
+	slice.stable_sort_by(pending[:], proc(a, b: Pending(T)) -> bool {
 		a, b := a, b
-		if a.policy != b.policy do return hash28_less(a.policy, b.policy)
+		if a.row.policy != b.row.policy do return hash28_less(a.row.policy, b.row.policy)
 		if a.group != b.group do return a.group < b.group
-		an, bn := a.name[:a.name_len], b.name[:b.name_len]
-		if string(an) != string(bn) do return string(an) < string(bn)
-		return a.seq < b.seq
+		return string(asset_name(&a.row)) < string(asset_name(&b.row))
 	})
 
 	// Keep, for each policy, only its last group; within it, the last entry
 	// of each name. From v9 any such duplicate is an error instead.
-	w := 0
+	start := len(out)
 	policies := 0
+	xs := pending[:]
 	i := 0
 	for i < len(xs) {
 		j := i
-		for j < len(xs) && xs[j].policy == xs[i].policy do j += 1
+		for j < len(xs) && xs[j].row.policy == xs[i].row.policy do j += 1
 		last_group := xs[j - 1].group
 		if last_group != xs[i].group && d.v >= 9 {
 			return .Duplicate_Key
@@ -133,22 +141,19 @@ read_multi_asset :: proc(d: ^Decoder, out: ^[dynamic]Asset, kind: Quantity_Kind)
 		kept := 0
 		for k in i ..< j {
 			if xs[k].group != last_group do continue
-			same_next := k + 1 < j && string(asset_name(&xs[k])) == string(asset_name(&xs[k + 1]))
-			if same_next {
+			if k + 1 < j && string(asset_name(&xs[k].row)) == string(asset_name(&xs[k + 1].row)) {
 				if d.v >= 9 do return .Duplicate_Key
 				continue
 			}
-			if xs[k].quantity == 0 do continue // pruned (below v9 only)
-			xs[w] = xs[k]
-			w += 1
+			if xs[k].row.quantity == 0 do continue // pruned (below v9 only)
+			append(out, xs[k].row)
 			kept += 1
 		}
 		if kept > 0 do policies += 1
 		i = j
 	}
-	resize(out, start + w)
 
-	if 44 * w + 28 * policies > 65535 {
+	if 44 * (len(out) - start) + 28 * policies > 65535 {
 		return .Invalid_Value
 	}
 	return .None

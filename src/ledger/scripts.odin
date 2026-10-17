@@ -1,5 +1,7 @@
 package ledger
 
+import "base:runtime"
+
 import "urd:base"
 import "urd:cbor"
 import "urd:ccrypto"
@@ -49,7 +51,7 @@ era_supports :: proc "contextless" (era: base.Era, kind: Script_Kind) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// A small explicit stack: inline frames, spilling to the temp allocator only
+// A small explicit stack: inline frames, spilling to the block scratch only
 // for pathological nesting.
 
 @(private)
@@ -60,6 +62,9 @@ Stack :: struct($T: typeid) {
 	inline: [STACK_INLINE]T,
 	spill:  [dynamic]T,
 	n:      int,
+	// Where frames beyond STACK_INLINE go (the decoder's scratch); when unset,
+	// context.temp_allocator.
+	alloc:  runtime.Allocator,
 }
 
 @(private)
@@ -67,7 +72,9 @@ stack_push :: proc(s: ^Stack($T), v: T) {
 	if s.n < STACK_INLINE {
 		s.inline[s.n] = v
 	} else {
-		if s.spill == nil do s.spill = make([dynamic]T, context.temp_allocator)
+		if s.spill == nil {
+			s.spill = make([dynamic]T, s.alloc if s.alloc.procedure != nil else context.temp_allocator)
+		}
 		append(&s.spill, v)
 	}
 	s.n += 1
@@ -100,7 +107,9 @@ read_native_script :: proc(d: ^Decoder) -> (bytes: []u8, err: Error) {
 	}
 	start := d.r.pos
 	timelock := d.era >= .Allegra
-	stack: Stack(Frame)
+	stack := Stack(Frame) {
+		alloc = d.scratch,
+	}
 
 	// Reads one node; a node with children pushes a frame.
 	node :: proc(d: ^Decoder, stack: ^Stack(Frame), timelock: bool) -> Error {
@@ -204,7 +213,7 @@ script_ref_info :: proc(inner: []u8) -> (s: Script, ok: bool) {
 PLUTUS_BYTES_CHUNK_MAX :: 64
 
 // Checks that `r` is positioned at one well-formed Plutus Data item and
-// consumes it. Byte strings (and bignum payloads) are limited to 64 bytes per
+// consumes it. Deep nesting spills to `r.scratch`. Byte strings (and bignum payloads) are limited to 64 bytes per
 // definite string or per chunk of an indefinite one; maps keep duplicates.
 validate_plutus_data :: proc(r: ^cbor.Reader) -> Error {
 	Frame :: struct {
@@ -215,7 +224,9 @@ validate_plutus_data :: proc(r: ^cbor.Reader) -> Error {
 		wrapper:     cbor.Container,
 		has_wrapper: bool,
 	}
-	stack: Stack(Frame)
+	stack := Stack(Frame) {
+		alloc = r.scratch,
+	}
 
 	item :: proc(r: ^cbor.Reader, stack: ^Stack(Frame)) -> Error {
 		b := cbor.peek_byte(r) or_return
@@ -324,6 +335,7 @@ bounded_bytes_after_head :: proc "contextless" (r: ^cbor.Reader, h: cbor.Head) -
 read_inline_datum :: proc(d: ^Decoder) -> (payload: []u8, err: Error) {
 	payload = cbor.read_embedded(&d.r) or_return
 	r := cbor.reader(payload)
+	r.scratch = d.scratch
 	validate_plutus_data(&r) or_return
 	cbor.expect_end(&r) or_return
 	return payload, .None
@@ -344,7 +356,9 @@ validate_metadatum :: proc(d: ^Decoder) -> Error {
 	}
 	check_sizes := d.v > 2
 	r := &d.r
-	stack: Stack(Frame)
+	stack := Stack(Frame) {
+		alloc = d.scratch,
+	}
 
 	item :: proc(r: ^cbor.Reader, stack: ^Stack(Frame), check_sizes: bool) -> Error {
 		h := cbor.read_head(r) or_return
@@ -417,7 +431,7 @@ validate_metadatum :: proc(d: ^Decoder) -> Error {
 // Metadata: { Word64 label => metadatum }. Repeated labels are last-wins
 // below v9 and fail from v9.
 read_metadata :: proc(d: ^Decoder) -> Error {
-	labels := make([dynamic]u64, context.temp_allocator)
+	labels := make([dynamic]u64, d.scratch)
 	m := cbor.read_map(&d.r) or_return
 	for cbor.more(&d.r, &m) {
 		append(&labels, cbor.read_uint(&d.r) or_return)

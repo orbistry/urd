@@ -49,6 +49,10 @@ _test mode pkg name:
             -out:{{bin}}/test-$(echo "$p" | tr / -) $names
     done
 
+# Decoding throughput over the vendored preview chunks (or another ImmutableDB).
+bench db="testdata/immutable/preview": build
+    {{bin}}/urd bench-decode {{db}}
+
 # Format every Odin source file in place (config: odinfmt.json).
 fmt:
     odinfmt -w src
