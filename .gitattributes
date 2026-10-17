@@ -1,0 +1,11 @@
+# Vendored fixtures (see testdata/README.md): out of GitHub's language
+# statistics, collapsed in diffs.
+testdata/** linguist-vendored linguist-generated
+
+# Binary chain and script data.
+*.chunk     binary
+*.primary   binary
+*.secondary binary
+*.cbor      binary
+*.flat      binary
+*.bin       binary
