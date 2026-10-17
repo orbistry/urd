@@ -5,11 +5,12 @@ decisions and the roadmap.
 
 ## Commands
 
-- `make test`: all test packages (optimized). Tests read fixtures from `refs/`.
-- `make test-pkg PKG=src/cbor [NAME=cbor.test_x] [FAST=1]`: one package.
-- `make build` / `make check`.
-- `scripts/fetch-refs.sh`: clone the reference repos into `refs/` (gitignored)
-  at pinned commits.
+- `just test`: all test packages (optimized). Tests read fixtures from `refs/`.
+- `just test src/cbor [cbor.test_x]`: one package, optionally one test.
+  `just test-debug ...` builds the tests with debug info.
+- `just build` / `just debug` / `just check`.
+- `just refs [name...]`: clone the reference repos into `refs/` (gitignored)
+  at pinned commits (scripts/fetch-refs.sh).
 
 The shell is zsh-like: quote globs (`--include='*.hs'`), and don't start an
 `echo` argument with `=`.
