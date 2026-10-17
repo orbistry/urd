@@ -21,7 +21,7 @@ debug:
 check:
     {{odin}} check src/cmd/urd {{collection}} {{checks}}
 
-# Fixtures are read from refs/ (see `just refs`).
+# Fixtures are read from testdata/ (see testdata/README.md).
 [doc("Run tests (optimised): all, a package (just test src/cbor), or one test (just test src/cbor cbor.test_skip)")]
 test pkg="" name="":
     @just _test speed "{{pkg}}" "{{name}}"
@@ -69,6 +69,10 @@ fmt-check:
 # Clone the reference repositories into refs/ at their pinned commits.
 refs *names:
     scripts/fetch-refs.sh {{names}}
+
+# Regenerate testdata/ from the pinned reference repositories.
+testdata:
+    scripts/vendor-testdata.sh
 
 # Remove build outputs.
 clean:

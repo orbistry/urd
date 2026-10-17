@@ -5,14 +5,20 @@ decisions and the roadmap.
 
 ## Commands
 
-- `just test`: all test packages (optimized). Tests read fixtures from `refs/`.
+- `just test`: all test packages (optimized). Fixtures live in `testdata/`.
 - `just test src/cbor [cbor.test_x]`: one package, optionally one test.
   `just test-debug ...` builds the tests with debug info.
 - `just build` / `just debug` / `just check`.
 - `just fmt` / `just fmt-check`: odinfmt (Homebrew) with `odinfmt.json`. Run
   `just fmt` before committing.
 - `just refs [name...]`: clone the reference repos into `refs/` (gitignored)
-  at pinned commits (scripts/fetch-refs.sh).
+  at pinned commits, for reading their sources. Tests never read `refs/`.
+- `just testdata`: regenerate `testdata/` (every fixture the tests use,
+  vendored with provenance in testdata/README.md) from the pinned refs. New
+  fixtures go through scripts/vendor-testdata.sh.
+- CI (.github/workflows/ci.yml) runs `fmt-check`, then `check`, `build` and
+  `test` on Linux x86_64 and macOS arm64, pinned to the same Odin release as
+  local development.
 
 The shell is zsh-like: quote globs (`--include='*.hs'`), and don't start an
 `echo` argument with `=`.

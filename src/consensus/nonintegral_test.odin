@@ -5,8 +5,10 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-PALLAS_MATH :: "refs/pallas/pallas-math/tests/data/"
-GOLDEN :: "refs/cardano-ledger/libs/non-integral/reference/"
+// Node vectors (via pallas) and cardano-ledger's golden lines; see
+// testdata/README.md.
+PALLAS_MATH :: "testdata/nonintegral/"
+GOLDEN :: "testdata/nonintegral/"
 
 @(private = "file")
 lines_of :: proc(path: string, allocator := context.temp_allocator) -> []string {

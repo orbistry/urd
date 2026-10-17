@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Keep in step with the compiler used locally (`odin version`) and the
+  # odinfmt release that matches it.
+  ODIN_RELEASE: dev-2026-10
+  OLS_RELEASE: dev-2026-10
+
+jobs:
+  fmt:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+      - name: Install odinfmt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$OLS_RELEASE" -R DanielGavin/ols \
+            -p 'ols-x86_64-unknown-linux-gnu.zip' -D "$RUNNER_TEMP"
+          unzip -q "$RUNNER_TEMP/ols-x86_64-unknown-linux-gnu.zip" -d "$RUNNER_TEMP/ols"
+          mkdir -p "$HOME/.local/bin"
+          install -m 755 "$RUNNER_TEMP/ols/odinfmt-x86_64-unknown-linux-gnu" "$HOME/.local/bin/odinfmt"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: just fmt-check
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+      - uses: laytan/setup-odin@8536d8fa450ec6f1bd9ddc84bbaaf16296c0051d # v2.12.2
+        with:
+          token: ${{ github.token }}
+          release: ${{ env.ODIN_RELEASE }}
+      - run: odin version
+      - run: just check
+      - run: just build
+      - run: just test

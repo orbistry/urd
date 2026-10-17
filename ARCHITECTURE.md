@@ -51,9 +51,11 @@ collection (`import "urd:cbor"`).
 | `node`             | Wiring: threads, event loop, configuration, tracing. |
 | `cmd/urd`          | The node binary. Other tools live in `cmd/<tool>`. |
 
-Tests sit next to the code as `*_test.odin`. Larger fixtures come from
-`refs/` (the cloned reference repositories, gitignored) and are located by
-path at test time.
+Tests sit next to the code as `*_test.odin`; integration tests live in
+`tests/`. Every fixture is vendored in `testdata/`, copied from the reference
+repositories at pinned commits by `scripts/vendor-testdata.sh` (provenance in
+testdata/README.md), so the suite depends on nothing outside the repository.
+`refs/` (gitignored) holds those repositories for reading.
 
 ## Key designs
 

@@ -11,12 +11,11 @@ import "urd:ccrypto"
 import "urd:ledger"
 import "urd:storage/immutable"
 
-// 300 preview chunks (Alonzo and Babbage), from dingo's test data.
-PREVIEW_DB :: "refs/dingo/database/immutable/testdata"
-// Babbage chunks from pallas's test data. Its third chunk,
-// 02019, is truncated on purpose, so it is left out.
-MAINNET_DB :: "refs/pallas/test_data"
-MAINNET_CHUNKS :: []u32{1285, 1836}
+// 300 preview chunks (Alonzo and Babbage), vendored from dingo's test data
+// (see testdata/README.md).
+PREVIEW_DB :: "testdata/immutable/preview"
+// Two complete Babbage chunks from pallas's test data.
+PALLAS_DB :: "testdata/immutable/pallas"
 
 @(test)
 test_preview_headers_and_body_hashes :: proc(t: ^testing.T) {
@@ -24,21 +23,17 @@ test_preview_headers_and_body_hashes :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_mainnet_headers_and_body_hashes :: proc(t: ^testing.T) {
-	check_db(t, MAINNET_DB, MAINNET_CHUNKS)
+test_pallas_headers_and_body_hashes :: proc(t: ^testing.T) {
+	check_db(t, PALLAS_DB)
 }
 
 // Decodes every block of an ImmutableDB and checks the header and body hashes
 // against the secondary index and the header.
-check_db :: proc(t: ^testing.T, dir: string, only: []u32 = nil) {
+check_db :: proc(t: ^testing.T, dir: string) {
 	chunks, err := immutable.list_chunks(dir)
 	defer delete(chunks)
 	testing.expect_value(t, err, immutable.Error.None)
-	if only != nil {
-		clear(&chunks)
-		append(&chunks, ..only)
-	}
-	testing.expect(t, len(chunks) > 0, "no chunks found; run scripts/fetch-refs.sh")
+	testing.expect(t, len(chunks) > 0, "no chunks found in testdata/")
 
 	chunk: immutable.Chunk
 	immutable.chunk_init(&chunk)

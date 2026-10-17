@@ -6,7 +6,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-PLUTUS_BUILTINS :: "refs/plutus/plutus-conformance/test-cases/uplc/evaluation/builtin/semantics/"
+PLUTUS_BUILTINS :: "testdata/plutus/conformance/builtin/semantics/"
 
 // Byte-string literals of a conformance-test program, in order.
 @(private)
@@ -150,7 +150,7 @@ read_kv_vector :: proc(path: string) -> map[string][]u8 {
 
 @(test)
 test_vrf03_vectors :: proc(t: ^testing.T) {
-	DIR :: "refs/cardano-base/cardano-crypto-praos/test_vectors/"
+	DIR :: "testdata/crypto/vrf/"
 	names := []string {
 		"standard_10",
 		"standard_11",
@@ -186,7 +186,7 @@ test_vrf03_vectors :: proc(t: ^testing.T) {
 
 @(test)
 test_kes_sum6_haskell_interop :: proc(t: ^testing.T) {
-	DIR :: "refs/pallas/pallas-crypto/src/kes/data/"
+	DIR :: "testdata/crypto/kes/"
 	key, kerr := os.read_entire_file(DIR + "key6.bin", context.temp_allocator)
 	testing.expect(t, kerr == nil && len(key) == 608)
 	// The raw Sum6 signing key ends with the top-level (vk0, vk1) pair.

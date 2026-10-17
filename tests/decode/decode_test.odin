@@ -48,7 +48,7 @@ PALLAS_REJECTED :: [?]string {
 // Real blocks of every era from pallas's test data (HFC-wrapped hex).
 @(test)
 test_pallas_blocks :: proc(t: ^testing.T) {
-	DIR :: "refs/pallas/test_data/"
+	DIR :: "testdata/blocks/pallas/"
 	infos, err := os.read_all_directory_by_path(DIR, context.temp_allocator)
 	testing.expect(t, err == nil)
 	tables: ledger.Block_Tables
@@ -74,7 +74,7 @@ test_pallas_blocks :: proc(t: ^testing.T) {
 // ouroboros-consensus golden blocks (CBOR-in-CBOR wrapped), one per era.
 @(test)
 test_consensus_golden_blocks :: proc(t: ^testing.T) {
-	DIR :: "refs/ouroboros-consensus/ouroboros-consensus-cardano/golden/cardano/CardanoNodeToNodeVersion2/"
+	DIR :: "testdata/blocks/consensus/"
 	tables: ledger.Block_Tables
 	ledger.tables_init(&tables)
 	defer ledger.tables_destroy(&tables)
@@ -102,7 +102,7 @@ Meta :: struct {
 // bodies, each labelled well-formed or not.
 @(test)
 test_amaru_corpus :: proc(t: ^testing.T) {
-	ROOT :: "refs/amaru/crates/amaru-kernel/tests/data/cbor.decode/"
+	ROOT :: "testdata/cbor-decode/amaru/"
 	tables: ledger.Block_Tables
 	ledger.tables_init(&tables)
 	defer ledger.tables_destroy(&tables)

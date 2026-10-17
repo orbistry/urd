@@ -1,5 +1,7 @@
 #!/bin/sh
-# Clone the reference repositories used by tests into refs/ at pinned commits.
+# Clone the reference repositories into refs/ at pinned commits. They are for
+# reading (and for regenerating testdata/ with scripts/vendor-testdata.sh);
+# the tests never read refs/.
 # Usage: scripts/fetch-refs.sh [name...]   (no args = all)
 set -eu
 
