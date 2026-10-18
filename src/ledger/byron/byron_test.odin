@@ -833,6 +833,38 @@ test_utxo_rules :: proc(t: ^testing.T) {
 // every block is accepted, version 1.0.0 is adopted at epoch 2, 2.0.0
 // becomes a candidate at slot 56163, and the chain knows Shelley starts at
 // epoch 4 (docs/rules/byron-delegation-update.md §2.11).
+// Compaction must move every surviving address. Mainnet epoch 9 crashed on
+// the first compaction when it left most entries pointing into the old arena.
+@(test)
+test_utxo_compaction :: proc(t: ^testing.T) {
+	u: Utxo
+	utxo_init(&u)
+	defer utxo_destroy(&u)
+	N :: 30_000
+	address :: proc(i: int) -> (a: [64]u8) {
+		for &b, j in a do b = u8(i * 31 + j)
+		return
+	}
+	txin :: proc(i: int) -> (x: base.Tx_In) {
+		x.id[0], x.id[1], x.index = u8(i), u8(i >> 8), u16(i >> 16)
+		return
+	}
+	for i in 0 ..< N {
+		a := address(i)
+		utxo_insert(&u, txin(i), a[:], u64(i))
+	}
+	// Spend two thirds: more than 1 MiB and more than half the arena dies.
+	for i in 0 ..< N do if i % 3 != 0 do utxo_remove(&u, txin(i))
+	utxo_maybe_compact(&u)
+	testing.expect_value(t, u.dead, 0)
+	testing.expect_value(t, len(u.addrs), N / 3 * 64)
+	for i := 0; i < N; i += 3 {
+		e, ok := utxo_get(&u, txin(i))
+		a := address(i)
+		if !testing.expect(t, ok && string(utxo_address(&u, e)) == string(a[:]), fmt.tprintf("entry %d", i)) do break
+	}
+}
+
 @(test)
 test_preprod_replay :: proc(t: ^testing.T) {
 	g, ok := load_genesis(t, "preprod.json")

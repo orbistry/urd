@@ -78,10 +78,12 @@ utxo_maybe_compact :: proc(u: ^Utxo) {
 		return
 	}
 	fresh := make([dynamic]u8, 0, len(u.addrs) - u.dead, u.addrs.allocator)
-	for _, &e in u.entries {
+	for txin, e in u.entries {
 		off := u32(len(fresh))
 		append(&fresh, ..u.addrs[e.addr_off:][:e.addr_len])
-		e.addr_off = off
+		// Not `for _, &e in u.entries`: Odin dev-2026-10 does not write
+		// through it when the key holds an array, as Tx_In does.
+		(&u.entries[txin]).addr_off = off
 	}
 	delete(u.addrs)
 	u.addrs = fresh
