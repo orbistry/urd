@@ -116,6 +116,34 @@ Byron hashing rules shape the decoder:
   hash, delegation and update payload hashes) is computed while decoding.
   Comparing it with the header is a rule (`proof_matches`).
 
+### Byron chain validation
+
+`byron.Chain` follows the path cardano-node takes, not the ledger's own
+CHAIN rule (docs/rules/byron-chain.md, byron-utxo.md,
+byron-delegation-update.md, byron-genesis.md):
+
+1. **Tick** to the block's slot: the update system's epoch transition (when
+   the slot opens a later epoch), then delegation activation.
+2. **Envelope**: block number (an EBB repeats its predecessor's), slot,
+   previous hash.
+3. **Ledger**: header and block size, body proofs, delegation certificates,
+   the update payload and the header's endorsement, then the transactions.
+4. **PBFT**: the block signature (donna Ed25519 under the delegate's key,
+   with the configured magic), the delegate's genesis key, and the
+   signature window (at most floor(0.22 k) of the last k blocks per key).
+
+Nothing changes unless the whole block is valid. The delegation and update
+states are small (every change needs a genesis delegate's signature), so each
+block works on scratch copies that are swapped in on success. The UTxO
+rules run against an overlay (what the block has consumed and produced so
+far) over the store and commit it last. Bignum protocol parameters live in an
+append-only pool the states refer to by span, so copying a state never copies
+them.
+
+The UTxO is held in memory (a hash index to 16-byte entries, addresses in a
+compacting arena) until the on-disk table engine exists. It stores each
+output's re-encoded address, which is what the Shelley translation inherits.
+
 ### Ledger state on disk
 
 The ledger state follows the UTxO-HD shape:
@@ -205,6 +233,7 @@ they evaluate in parallel.
 
 | Area | Source of truth |
 |------|-----------------|
+| Byron ledger | dingo's preprod Byron chain (full replay: proposals, votes, adoption, the Shelley transition epoch); mainnet epochs 0 to 2 (redemptions, 15,706 witnesses); signed synthetic certificates, proposals and votes for every rule. |
 | CBOR, blocks | ouroboros-consensus goldens (`ouroboros-consensus-cardano/golden`), pallas `test_data`, the dingo preview ImmutableDB corpus (300 chunks), dingo's preprod Byron chain, cardano-ledger's Byron CBOR goldens, ledger CDDLs. |
 | Crypto | cardano-base VRF, KES and BLS vectors; plutus builtin conformance cases; hash-parity goldens. |
 | Leader math | `cardano-ledger/libs/non-integral/reference` golden tests; pallas `node-vectors.tsv`. |
@@ -216,9 +245,11 @@ they evaluate in parallel.
 ## Roadmap
 
 Each milestone ends with its verification suite passing. Status: 1, 2
-(Byron through Conway; Dijkstra headers only), 3 and 5 are done. 4 has
-libsodium Ed25519, VRF and KES; the Byron (donna) Ed25519, RIPEMD-160, blst
-and libsecp256k1 remain.
+(Byron through Conway; Dijkstra headers only), 3 and 5 are done. 4 has both
+Ed25519 flavours, VRF and KES; RIPEMD-160, blst and libsecp256k1 remain. 6
+validates the whole preprod Byron chain and mainnet epochs 0 to 2 from
+genesis (`urd replay`); a full mainnet Byron replay, checkpoints and
+header-only validation for chain-sync (the delegation forecast) remain.
 
 1. **Foundation.** Build script, base types, CBOR reader and writer, blake2b.
 2. **Blocks.** Decode every era (Byron EBB/main through Conway, Dijkstra

@@ -48,6 +48,9 @@ for f in preprod-byron-chain.cbor preprod-byron-last-84242.cbor mainnet-byron-44
 	cp refs/dingo/ledger/testdata/$f "$T/byron/dingo/"
 done
 copy refs/cardano-ledger/eras/byron/ledger/impl/golden/cbor "$T/byron/golden"
+mkdir -p "$T/byron/genesis"
+cp refs/cardano-node/configuration/cardano/mainnet-byron-genesis.json "$T/byron/genesis/mainnet.json"
+cp refs/dingo/config/cardano/preprod/byron-genesis.json "$T/byron/genesis/preprod.json"
 
 # Amaru's labelled Conway decoding corpus.
 copy refs/amaru/crates/amaru-kernel/tests/data/cbor.decode "$T/cbor-decode/amaru"

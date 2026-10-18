@@ -11,6 +11,8 @@ decisions and the roadmap.
 - `just build` / `just debug` / `just check`.
 - `just bench [DB]`: block-decoding throughput, and allocations in steady state
   (must stay 0).
+- `bin/urd replay DIR --genesis FILE [--requires-magic]`: validate an
+  ImmutableDB's Byron era from genesis.
 - `just fmt` / `just fmt-check`: odinfmt (Homebrew) with `odinfmt.json`. Run
   `just fmt` before committing.
 - `just refs [name...]`: clone the reference repos into `refs/` (gitignored)
@@ -41,4 +43,9 @@ The shell is zsh-like: quote globs (`--include='*.hs'`), and don't start an
 - Keep original bytes (as slices or `base.Span`) for anything that is hashed.
 - Consensus crypto lives in `ccrypto` and matches libsodium/cardano-base
   semantics. Never use `core:crypto/ed25519` for consensus.
-- Docs written from Haskell sources live in `docs/decoding/`.
+- Docs written from Haskell sources live in `docs/decoding/` (decoders) and
+  `docs/rules/` (ledger and consensus rules). Rules follow the path
+  cardano-node runs (consensus's `applyChainTick` / `validateBlock`), not the
+  ledger's test-oriented CHAIN rule.
+- Byron signatures use ed25519-donna semantics (`ccrypto.ed25519_verify_donna`),
+  later eras libsodium's (`ccrypto.ed25519_verify`).

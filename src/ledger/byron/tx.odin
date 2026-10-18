@@ -28,6 +28,17 @@ Tx :: struct {
 	// `unknownAttributesLength` of the transaction attributes (all entries
 	// are unknown); the UTxO rule requires it to be below 128.
 	unknown_attrs_len: u32,
+	// The bytes received are canonical, so `id` is also their hash, which is
+	// what witnesses sign.
+	canonical:         bool,
+}
+
+// Blake2b-256 of the transaction as received (`recoverSigData`).
+tx_sig_hash :: proc(tx: ^Tx, block: []u8) -> base.Hash32 {
+	if tx.canonical {
+		return base.Hash32(tx.id)
+	}
+	return ccrypto.blake2b_256(base.span_bytes(block, tx.body))
 }
 
 Tx_Out :: struct {
@@ -67,7 +78,7 @@ read_tx_aux :: proc(d: ^Decoder) -> Error {
 	tx := read_tx(d) or_return
 	tx.witnesses, tx.witness_list = read_witness_list(d) or_return
 	tx.aux = span_from(d, start)
-	tx.id = tx_id(d.t, base.span_bytes(d.base, tx.body))
+	tx.id, tx.canonical = tx_id(d.t, base.span_bytes(d.base, tx.body))
 	append(&d.t.txs, tx)
 	return .None
 }
@@ -193,13 +204,13 @@ read_witness :: proc "contextless" (r: ^cbor.Reader) -> (w: Witness, err: Error)
 // and addresses, which are re-encoded from their decoded values; address
 // CRCs then match too. Otherwise the transaction is re-encoded.
 @(private)
-tx_id :: proc(t: ^Tables, body: []u8) -> base.Tx_Id {
+tx_id :: proc(t: ^Tables, body: []u8) -> (id: base.Tx_Id, canonical: bool) {
 	if heads_minimal(body) {
-		return base.Tx_Id(ccrypto.blake2b_256(body))
+		return base.Tx_Id(ccrypto.blake2b_256(body)), true
 	}
 	cbor.writer_reset(&t.encoder)
 	reencode_tx(&t.encoder, body)
-	return base.Tx_Id(ccrypto.blake2b_256(cbor.writer_bytes(&t.encoder)))
+	return base.Tx_Id(ccrypto.blake2b_256(cbor.writer_bytes(&t.encoder))), false
 }
 
 // Reports whether every head of `item` (one well-formed data item) uses the

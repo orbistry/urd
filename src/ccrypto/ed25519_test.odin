@@ -208,3 +208,142 @@ test_kes_sum6_haskell_interop :: proc(t: ^testing.T) {
 		sig0[i] ~= 1
 	}
 }
+
+// ed25519-donna edge cases. The signatures were constructed with a reference
+// Ed25519 implementation (S + L, small-order, mixed-order and non-canonical
+// keys), and each expected verdict is what crypton's `ed25519_sign_open`
+// returns for it.
+@(private = "file")
+Donna_Case :: struct {
+	name: string,
+	pk:   string,
+	msg:  string,
+	sig:  string,
+	ok:   bool,
+}
+
+@(test)
+test_ed25519_donna_edge_cases :: proc(t: ^testing.T) {
+	cases := [?]Donna_Case {
+		{
+			"valid",
+			"eaa0304d1f7ddb4c13ac991d1a59126341a3fc495f4906cede5e299aa17de235",
+			"6279726f6e",
+			"bbe05254f971bf9b4b22fed13acc692e94edfe932a94ccbb3a613d22c6f446d655a7af1d922a55a175bcb5072d33726fc2a9aa2fc9bec1fd1e1701d277a56c09",
+			true,
+		},
+		{
+			"s_plus_l",
+			"eaa0304d1f7ddb4c13ac991d1a59126341a3fc495f4906cede5e299aa17de235",
+			"6279726f6e",
+			"bbe05254f971bf9b4b22fed13acc692e94edfe932a94ccbb3a613d22c6f446d6427ba57aac8d67f94b59adaa0b2d5184c2a9aa2fc9bec1fd1e1701d277a56c19",
+			true,
+		},
+		{
+			"s_plus_2l",
+			"eaa0304d1f7ddb4c13ac991d1a59126341a3fc495f4906cede5e299aa17de235",
+			"6279726f6e",
+			"bbe05254f971bf9b4b22fed13acc692e94edfe932a94ccbb3a613d22c6f446d62f4f9bd7c6f0795122f6a44dea263099c2a9aa2fc9bec1fd1e1701d277a56c29",
+			false,
+		},
+		{
+			"s_bit_253",
+			"eaa0304d1f7ddb4c13ac991d1a59126341a3fc495f4906cede5e299aa17de235",
+			"6279726f6e",
+			"bbe05254f971bf9b4b22fed13acc692e94edfe932a94ccbb3a613d22c6f446d655a7af1d922a55a175bcb5072d33726fc2a9aa2fc9bec1fd1e1701d277a56c29",
+			false,
+		},
+		{
+			"wrong_msg",
+			"eaa0304d1f7ddb4c13ac991d1a59126341a3fc495f4906cede5e299aa17de235",
+			"6279726f6e21",
+			"bbe05254f971bf9b4b22fed13acc692e94edfe932a94ccbb3a613d22c6f446d655a7af1d922a55a175bcb5072d33726fc2a9aa2fc9bec1fd1e1701d277a56c09",
+			false,
+		},
+		{
+			"r_sign_flipped",
+			"eaa0304d1f7ddb4c13ac991d1a59126341a3fc495f4906cede5e299aa17de235",
+			"6279726f6e",
+			"bbe05254f971bf9b4b22fed13acc692e94edfe932a94ccbb3a613d22c6f4465655a7af1d922a55a175bcb5072d33726fc2a9aa2fc9bec1fd1e1701d277a56c09",
+			false,
+		},
+		{
+			"a_identity",
+			"0100000000000000000000000000000000000000000000000000000000000000",
+			"6d",
+			"ef4f62f8479733ad879cfaced3c89a9c39dd4fc795ef2efa1c3eafe4d729a0813930000000000000000000000000000000000000000000000000000000000000",
+			true,
+		},
+		{
+			"a_identity_sign",
+			"0100000000000000000000000000000000000000000000000000000000000080",
+			"6d",
+			"ef4f62f8479733ad879cfaced3c89a9c39dd4fc795ef2efa1c3eafe4d729a0813930000000000000000000000000000000000000000000000000000000000000",
+			true,
+		},
+		{
+			"a_identity_noncanon",
+			"eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+			"6d",
+			"ef4f62f8479733ad879cfaced3c89a9c39dd4fc795ef2efa1c3eafe4d729a0813930000000000000000000000000000000000000000000000000000000000000",
+			true,
+		},
+		{
+			"a_order2_even",
+			"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+			"74776f2d30",
+			"ef4f62f8479733ad879cfaced3c89a9c39dd4fc795ef2efa1c3eafe4d729a0813930000000000000000000000000000000000000000000000000000000000000",
+			true,
+		},
+		{
+			"a_order2_odd",
+			"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+			"74776f2d31",
+			"ef4f62f8479733ad879cfaced3c89a9c39dd4fc795ef2efa1c3eafe4d729a0813930000000000000000000000000000000000000000000000000000000000000",
+			false,
+		},
+		{
+			"a_order4_noncanon",
+			"edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+			"666f75722d30",
+			"ef4f62f8479733ad879cfaced3c89a9c39dd4fc795ef2efa1c3eafe4d729a0813930000000000000000000000000000000000000000000000000000000000000",
+			true,
+		},
+		{
+			"a_torsion_k0",
+			"78e2fd43cec9ae7995713f91e6cbe3b70acf2f2cee3fbe8c2ecc4c12542a905b",
+			"65696768742d37",
+			"fec48efcd0c81dbe72feee48e57c8369aed2b6592b34d7814d93ecc38c7a8ce811b2c472c5122049523351ba2e1768b77a7d9a59b8b98236c47708bb35b20405",
+			true,
+		},
+		{
+			"a_torsion_k_nonzero",
+			"78e2fd43cec9ae7995713f91e6cbe3b70acf2f2cee3fbe8c2ecc4c12542a905b",
+			"65696768742d30",
+			"5628414db47100b13fbfc402cc227a38a1b5ee7b5c4127f05c977a06f6fa79236683072c78520057d914e3d394d39fd8bf0fc610eb3fca6c16faebfc31344b05",
+			false,
+		},
+		{
+			"a_not_on_curve",
+			"0200000000000000000000000000000000000000000000000000000000000000",
+			"6279726f6e",
+			"5628414db47100b13fbfc402cc227a38a1b5ee7b5c4127f05c977a06f6fa792355a7af1d922a55a175bcb5072d33726fc2a9aa2fc9bec1fd1e1701d277a56c09",
+			false,
+		},
+	}
+	for c in cases {
+		pk, _ := hex.decode(transmute([]u8)c.pk, context.temp_allocator)
+		msg, _ := hex.decode(transmute([]u8)c.msg, context.temp_allocator)
+		sig, _ := hex.decode(transmute([]u8)c.sig, context.temp_allocator)
+		testing.expectf(t, ed25519_verify_donna(pk, msg, sig) == c.ok, "%s: expected %v", c.name, c.ok)
+	}
+	// libsodium rejects what donna accepts beyond the plain signature.
+	for c in cases[1:] {
+		pk, _ := hex.decode(transmute([]u8)c.pk, context.temp_allocator)
+		msg, _ := hex.decode(transmute([]u8)c.msg, context.temp_allocator)
+		sig, _ := hex.decode(transmute([]u8)c.sig, context.temp_allocator)
+		if c.name == "a_torsion_k0" do continue // mixed order: libsodium accepts too
+		testing.expectf(t, !ed25519_verify(pk, msg, sig), "%s: libsodium should reject", c.name)
+	}
+	free_all(context.temp_allocator)
+}

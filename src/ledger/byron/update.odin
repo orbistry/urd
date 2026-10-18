@@ -18,7 +18,7 @@ PParam :: enum u8 {
 	Heavy_Del_Thd,
 	Update_Vote_Thd,
 	Update_Proposal_Thd,
-	Update_Implicit,
+	Update_Proposal_Ttl,
 	Softfork_Rule,
 	Tx_Fee_Policy,
 	Unlock_Stake_Epoch,
@@ -49,25 +49,31 @@ Tx_Size_Linear :: struct {
 	b: Nano,
 }
 
+// A `Natural`: the value when it fits 64 bits, otherwise its big-endian
+// magnitude (no leading zeros) in `big`, relative to the decoding base or,
+// once in the update state, to the chain's bignum pool. The update rules
+// compare parameters with each other exactly (docs/rules/
+// byron-delegation-update.md §5), so large values are kept whole.
+Natural :: struct {
+	small: u64,
+	big:   base.Span,
+}
+
 // `ProtocolParametersUpdate`: each field is a `Maybe`; `present` says which
 // were given.
-//
-// The Natural fields (slot duration and the size limits) are bignum-capable;
-// values past 64 bits are stored as max(u64). Sizes are compared against
-// lengths that fit 64 bits, so saturation does not change any comparison.
 PParams_Update :: struct {
 	present:             bit_set[PParam;u16],
 	script_version:      u16,
-	slot_duration:       u64,
-	max_block_size:      u64,
-	max_header_size:     u64,
-	max_tx_size:         u64,
-	max_proposal_size:   u64,
+	slot_duration:       Natural,
+	max_block_size:      Natural,
+	max_header_size:     Natural,
+	max_tx_size:         Natural,
+	max_proposal_size:   Natural,
 	mpc_thd:             u64,
 	heavy_del_thd:       u64,
 	update_vote_thd:     u64,
 	update_proposal_thd: u64,
-	update_implicit:     u64,
+	update_proposal_ttl: u64,
 	softfork_rule:       Softfork_Rule,
 	tx_fee_policy:       Tx_Size_Linear,
 	unlock_stake_epoch:  u64,
@@ -207,15 +213,15 @@ read_pparams_update :: proc "contextless" (d: ^Decoder) -> (u: PParams_Update, e
 		case .Script_Version:
 			u.script_version = cbor.read_u16(r) or_return
 		case .Slot_Duration:
-			u.slot_duration, _ = cbor.read_natural(r) or_return
+			u.slot_duration = read_natural(d) or_return
 		case .Max_Block_Size:
-			u.max_block_size, _ = cbor.read_natural(r) or_return
+			u.max_block_size = read_natural(d) or_return
 		case .Max_Header_Size:
-			u.max_header_size, _ = cbor.read_natural(r) or_return
+			u.max_header_size = read_natural(d) or_return
 		case .Max_Tx_Size:
-			u.max_tx_size, _ = cbor.read_natural(r) or_return
+			u.max_tx_size = read_natural(d) or_return
 		case .Max_Proposal_Size:
-			u.max_proposal_size, _ = cbor.read_natural(r) or_return
+			u.max_proposal_size = read_natural(d) or_return
 		case .Mpc_Thd:
 			u.mpc_thd = read_lovelace_portion(r) or_return
 		case .Heavy_Del_Thd:
@@ -224,8 +230,8 @@ read_pparams_update :: proc "contextless" (d: ^Decoder) -> (u: PParams_Update, e
 			u.update_vote_thd = read_lovelace_portion(r) or_return
 		case .Update_Proposal_Thd:
 			u.update_proposal_thd = read_lovelace_portion(r) or_return
-		case .Update_Implicit:
-			u.update_implicit = cbor.read_uint(r) or_return
+		case .Update_Proposal_Ttl:
+			u.update_proposal_ttl = cbor.read_uint(r) or_return
 		case .Softfork_Rule:
 			enforce_size(r, 3) or_return
 			u.softfork_rule.init_thd = read_lovelace_portion(r) or_return
@@ -267,6 +273,20 @@ read_tx_size_linear :: proc "contextless" (d: ^Decoder, r: ^cbor.Reader) -> (f: 
 	}
 	f.b = read_nano(d, r) or_return
 	return f, .None
+}
+
+// `decodeNatural`: `decodeInteger`, non-negative.
+@(private)
+read_natural :: proc "contextless" (d: ^Decoder) -> (n: Natural, err: Error) {
+	i := cbor.read_integer(&d.r) or_return
+	if i.negative {
+		return n, .Invalid_Value
+	}
+	n.small = i.small
+	if i.big != nil {
+		n.big = base.span_of(d.base, i.big)
+	}
+	return n, .None
 }
 
 // `decCBOR @Nano`: `MkFixed <$> decodeInteger`.

@@ -26,6 +26,8 @@ commands:
           --out DIR                            (required)
           --blocks N                           (default 10000)
           --from SLOT.HASH                     (default: genesis)
+  replay  DIR --genesis FILE [--requires-magic]
+          validate an ImmutableDB's Byron era from its genesis (PBFT, ledger rules)
 `
 
 Network :: struct {
@@ -59,6 +61,8 @@ main :: proc() {
 		os.exit(bench_decode(args[1:]))
 	case "diag":
 		os.exit(diag(args[1:]))
+	case "replay":
+		os.exit(replay(args[1:]))
 	case:
 		fmt.eprint(USAGE)
 		os.exit(2)
