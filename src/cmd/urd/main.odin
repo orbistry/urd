@@ -145,12 +145,12 @@ fetch :: proc(args: []string) -> int {
 		fmt.eprintfln("no intersection at %v (%v)", start, ierr)
 		return 1
 	}
-	fmt.printfln(
-		"intersection at slot %d; peer tip at slot %d, block %d",
-		u64(at.slot),
-		u64(tip.point.slot),
-		tip.block_no,
-	)
+	if base.point_is_origin(at) {
+		fmt.printf("intersection at origin")
+	} else {
+		fmt.printf("intersection at slot %d", u64(at.slot))
+	}
+	fmt.printfln("; peer tip at slot %d, block %d", u64(tip.point.slot), tip.block_no)
 
 	w: immutable.Writer
 	if immutable.writer_init(&w, out, cfg.chunk_size) != .None {

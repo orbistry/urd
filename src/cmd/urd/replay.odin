@@ -35,7 +35,9 @@ replay :: proc(args: []string) -> int {
 		fmt.eprintfln("genesis: %v", gerr)
 		return 1
 	}
-	fmt.printfln("genesis %x, magic %d, k %d", g.hash[:], g.protocol_magic, g.k)
+	fmt.print("genesis ")
+	for b in g.hash do fmt.printf("%02x", b)
+	fmt.printfln(", magic %d, k %d", g.protocol_magic, g.k)
 	c: byron.Chain
 	if e := byron.chain_init(&c, &g, requires_magic); e != .None {
 		fmt.eprintfln("genesis delegation: %v", e)
